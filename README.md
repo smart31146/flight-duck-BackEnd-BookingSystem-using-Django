@@ -1,4 +1,4 @@
-# Flight-Duck Back-End
+# FlightDuck Back-End
 
 A Django server providing the Flight & Hotel pricing and to perform booking operations.
 
@@ -32,6 +32,23 @@ Will be running on AWS, more details of set up as it's created. [Here's a previe
 Things to come:
 1. Secrets stored in [SSM Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html)
 2. Use Environment Variables using debug code
+
+# Setup Troubleshooting
+
+### Error: pg_config executable not found.
+
+On Linux, if you get this:
+```
+Error: pg_config executable not found.
+```
+
+This executable is found in the `libpq-dev` package (PostgreSQL development tool package). To fix this:
+1. Install the `libpq-dev` (or `libpq-devel`) and `python-dev` (or `python-devel`) packages. ([Source](https://stackoverflow.com/a/12037133))
+2. Also make sure that the relevant path is exported in your `PATH` environment variable (`export PATH=$PATH:/usr/pgsql-10/bin`)
+
+If you edit your `PATH`, open a new terminal session for it to take effect.
+
+
 
 <!-- Flight duck project
 
