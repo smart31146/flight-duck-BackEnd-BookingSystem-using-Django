@@ -9,28 +9,34 @@ https://docs.djangoproject.com/en/3.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
+import environ
 import os
 from pathlib import Path
 from decouple import config
-import os
 # import dj_database_url
 # import django_heroku
 
+env = environ.Env(
+    DEBUG=(bool, True)
+)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "#0n&@9r(69=*_p)0%j3-bc_8dtb*y6(krj(^!rvgdmoz*h$nd$"
+SECRET_KEY = env('SECRET_KEY')
+# SECRET_KEY = "#0n&@9r(69=*_p)0%j3-bc_8dtb*y6(krj(^!rvgdmoz*h$nd$"
 # SECRET_KEY = config('SECRET_KEY')
 # SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = env('DEBUG')
 # DEBUG = False
-DEBUG = True
+# DEBUG = True
 # DEBUG = config('DEBUG')
 
 ALLOWED_HOSTS = [
