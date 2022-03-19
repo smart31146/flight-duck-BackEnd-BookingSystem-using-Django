@@ -10,12 +10,13 @@ A Django server providing the Flight & Hotel pricing and to perform booking oper
     * For Mac/Linux systems, install `python-dev` tools. [Source](https://stackoverflow.com/a/21530768)
 2. Install [Pip](https://pip.pypa.io/en/stable/installation/) for your system
 3. Install [Postgres](https://www.postgresql.org/download/) and [pg_group](https://stackoverflow.com/a/12037133) for your system
-3. Install `pip` packages from `requirements.txt` file
+4. Install `pip` packages from `requirements.txt` file
 ```shell
 python -m pip install -r requirements.txt
 ```
-3. Start server with: `python manage.py runserver`
-4. Profit!
+5. Get the `.env` from a developer and place in root directory of repo
+6. Start server with: `python manage.py runserver`
+7. Profit!
 
 ### Run both Front-End with Back-End
 
