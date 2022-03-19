@@ -1,3 +1,4 @@
+from pyexpat import model
 from rest_framework import serializers
 from . import forms, models
 from rest_framework.response import Response
@@ -25,6 +26,16 @@ class FlightsLiveModelFormSerializer(serializers.ModelSerializer):
             'user_id' : {'required' : False} # define the 'user' field as 'read-only'
         }
 
+class PackageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = models.PackageModel
+        fields = '__all__'
+        extra_kwargs = {
+            'user_id' : {'required': False}
+        }
+
+# TODO: Remove if redundant
 class FlightsHotelPackageSerializer(serializers.ModelSerializer):
 
     class Meta:

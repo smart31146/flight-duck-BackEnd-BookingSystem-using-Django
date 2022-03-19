@@ -24,6 +24,8 @@ urlpatterns = [
     path('flights/', include('flights.urls')),
     path('hotels/', include('hotels.urls')),
     path('auth/', include('drf_social_oauth2.urls', namespace='drf')),
+
+    path('travel/', include('travel.urls')),
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

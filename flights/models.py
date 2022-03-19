@@ -1,3 +1,4 @@
+from email.policy import default
 from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 
@@ -39,13 +40,29 @@ class CurrencyModel(models.Model):
     rounding_coefficient = models.IntegerField(default=0)
     decimal_digits = models.IntegerField(default=0)
 
+class PackageModel(models.Model):
+    origin = models.CharField(max_length=10)
+    destination = models.CharField(max_length=10)
+    outbound_date = models.CharField(max_length=10)
+    adults = models.IntegerField(default=0)
+    children = models.IntegerField(default=0)
+    country = models.CharField(max_length=10) # TODO: Figure out how this is supposed to work
+    currency_format = models.CharField(max_length=10)
+    locale = models.CharField(max_length=10)
+    destination_code = models.CharField(max_length=10, default='', blank=True)
+    trip_days = models.IntegerField(default=1, validators=[MaxValueValidator(30)])
+    number_of_extended_months = models.IntegerField(default=0)
+    user_id = models.CharField(max_length=100, blank=True)
+
+# TODO: Remove if redundant
 class FlightsHotelPackageModel(models.Model):
     originplace = models.CharField(max_length=10)
     destinationplace = models.CharField(max_length=10)
     outbounddate = models.CharField(max_length=10,
         validators=[RegexValidator(regex='^.{10}$', message='Length has to be 10')])
-    inbounddate = models.CharField(max_length=10, blank=True,
-        validators=[RegexValidator(regex='^.{10}$', message='Length has to be 10')])
+    inbounddate = models.CharField(max_length=20)
+    # inbounddate = models.CharField(max_length=10, blank=True,
+    #     validators=[RegexValidator(regex='^.{10}$', message='Length has to be 10')])
     adults = models.IntegerField(default=0)
     rooms = models.IntegerField(default=0, validators=[MinValueValidator(1)])
     children = models.IntegerField(default=0, blank=True)
