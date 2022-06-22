@@ -297,8 +297,11 @@ class FlightLivePrices(APIView):
                 user.save()
             
             ## flights serializer
+            print("WE ARE IN THE SERIALIZER")
             serializer = serializers.FlightsLiveModelFormSerializer(data = request.data)
             if serializer.is_valid():
+                print("SERIALIZER is valid")
+                print(request.data)
                 liveFlightsPricingURL = FLIGHTS_API_URL + 'pricing/v1.0'
                 data = {
                     'country': request.data['country'], 
@@ -311,10 +314,17 @@ class FlightLivePrices(APIView):
                     'adults': request.data['adults'],
                     'apikey': FLIGHTS_API_KEY
                 }
+                print("THIS IS DATA")
+                print(data)
+                print("THIS IS URL")
+                print(liveFlightsPricingURL)
                 result = requests.post(
                     liveFlightsPricingURL,
                     data=data
                 )
+                print(result)
+            else:
+                print("SERIALIZER is not valid")
 
                 if (result.status_code == 201):
                     self.sessionToken = result.headers.get('Location').split('/')[-1]
@@ -335,76 +345,57 @@ class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
 
     def getOfflineFlightsResult(self, data):
+        # this is hitting each date so making multiple api requests that can be done in one if we search for the whole month instead of individual dates
+        print("this is data")
+        print("HEYEHYEHHEHEYEHEYEHEHYERHEFYHEHFYEHFYEF")
+        print(data)
         date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
         numberOfMonthsToTry = date.month + data['number_of_extended_months']
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(data['trip_days'])
+        date2 = '{:%Y-%m}'.format(datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d'))
+        country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
         finalFlightsList = []
-        for currentMonth in range(date.month, numberOfMonthsToTry+1):
-            if currentMonth<10:
-                currentMonth = "0"+str(currentMonth)
-            start_day = 1
-            if date.month == int(currentMonth):
-                start_day = date.day
-            for day in range(start_day, numberOfDaysInMonth[1]+1):
-                departureDate : str
-                returnDate : str
-                currentMonthWasIncreased = False
-                day = int(day)
-                returnDay = int(day+tripDays)
-                currentMonth = int(currentMonth)
-                if day<10:
-                    day = "0"+str(day)
-                if int(currentMonth)<10:
-                    currentMonth = "0"+str(currentMonth)
-                departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
-                if returnDay>numberOfDaysInMonth[1]:
-                    returnDay = returnDay-numberOfDaysInMonth[1]
-                    currentMonth = int(currentMonth)+1
-                    currentMonthWasIncreased = True
-                    if currentMonth<10:
-                        currentMonth = "0"+str(currentMonth)
-                if returnDay<10:
-                    returnDay = "0"+str(returnDay)
-                returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
-                
-                country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
-                
-                flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-                    FLIGHTS_API_URL, data['country'], data['currency_format'],
-                    data['originplace'], data['destinationplace'], 
-                    departureDate, returnDate)
+        flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
+        FLIGHTS_API_URL, data['country'], data['currency_format'],
+        data['originplace'], data['destinationplace'],
+        date2, date2)
+        try:
+            result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+            result.raise_for_status()
+            jsonResult = json.loads(result.text)
 
-                print(flightsBrowseRoutesURL)
-                
-                try:
-                    result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
-                    result.raise_for_status()
-                    jsonResult = json.loads(result.text)
-                    print(jsonResult)
-                    
-                    if jsonResult.get('Quotes', None):
-                        if len(jsonResult['Quotes'])>0:
+            # for loop that goes through each quote and adds to the array below and makes sure
+
+            if jsonResult.get('Quotes', None):
+                for quotes in jsonResult['Quotes']:
+                    outboundDate = datetime.datetime.strptime(quotes['OutboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
+                    inboundDate = datetime.datetime.strptime(quotes['InboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
+                    daysBetween = inboundDate - outboundDate
+                    print(daysBetween.days)
+                    # print(quotes['MinPrice'])
+                    if len(jsonResult['Quotes']) > 0:
+                        if daysBetween.days == tripDays:
                             finalFlightsList.append({
-                                'outbounddate': departureDate,
-                                'inbounddate': returnDate,
+                                'outbounddate': quotes['OutboundLeg']['DepartureDate'].split("T")[0],
+                                'inbounddate': quotes['InboundLeg']['DepartureDate'].split("T")[0],
                                 'carrier_name': jsonResult['Carriers'][0]['Name'],
-                                'price': jsonResult['Quotes'][0]['MinPrice'],
-                                'country': model_to_dict(country_name)['country_name']
+                                'price': quotes['MinPrice'],
+                                'country': model_to_dict(country_name)['country_name'],
                             })
-                except requests.exceptions.HTTPError as e:
-                    print("flight requests exception========", e)
-                    print("for date====", departureDate)
-                    print()
-                    finalFlightsList.append({
-                        'outbounddate': departureDate,
-                        'inbounddate': returnDate,
-                        'carrier_name': '',
-                        'price': 0
-                    })
-                if currentMonthWasIncreased == True:
-                    currentMonth = int(currentMonth)-1
-                    print("THIS IS FLIGHTS", finalFlightsList)
+        except requests.exceptions.HTTPError as e:
+            # print("flight requests exception========", e)
+            # print("for date====", departureDate)
+            # print()
+            finalFlightsList.append({
+                'outbounddate': departureDate,
+                'inbounddate': returnDate,
+                'carrier_name': '',
+                'price': 0
+            })
+        # if currentMonthWasIncreased == True:
+        #     currentMonth = int(currentMonth)-1
+        #     print("THIS IS FLIGHTS", finalFlightsList)
         return finalFlightsList
 
     def getHotelDeals(self, requestData):
@@ -476,13 +467,13 @@ class CacheFlightHotelsPackage(APIView):
                         json=data,
                         headers=headers_dict
                     )
-                    print("result======", result.status_code)
+                    # print("result======", result.status_code)
                     result.raise_for_status()
                     jsonData = json.loads(result.text)
                     hotel_object = {}
                     if (jsonData.get('hotels', None)):
                         cheapestHotel = jsonData['hotels'].get('hotels', None)
-                        print("cheapest hotel==========", cheapestHotel)
+                        # print("cheapest hotel==========", cheapestHotel)
                         if cheapestHotel:
                             hotel_name = cheapestHotel[0]['name']
                             hotel_city = cheapestHotel[0]['destinationName']
@@ -585,7 +576,7 @@ class CacheFlightHotelsPackage(APIView):
                     (float(flight['price']) != 0)
                 ):
                     
-                    total_price = float(flight['price']) + (float(hotel['price'])*hotel['tripDays'])
+                    total_price = float(flight['price']) + (float(hotel['price']))
                     bestPackagesList.append({
                         'outbounddate' : flight['outbounddate'],
                         'inbounddate' : flight['inbounddate'],
