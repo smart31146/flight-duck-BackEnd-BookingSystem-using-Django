@@ -415,7 +415,7 @@ class CacheFlightHotelsPackage(APIView):
         }
         # hotelsList = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
         # print("hotelsList========", hotelsList)
-        date = datetime.datetime.strptime(requestData['outbound_date'], '%Y-%m-%d')
+        date = datetime.datetime.strptime(requestData['outbounddate'], '%Y-%m-%d')
         numberOfMonthsToTry = date.month + requestData['number_of_extended_months']
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(requestData['trip_days'])
@@ -455,7 +455,7 @@ class CacheFlightHotelsPackage(APIView):
                     },
                     "occupancies": [
                         {
-                            # "rooms": requestData['rooms'],
+                            "rooms": requestData['rooms'],
                             "adults": requestData['adults'],
                             "children": requestData['children']
                         }
@@ -610,7 +610,7 @@ class CacheFlightHotelsPackage(APIView):
                 user.save()
             
             ## flights hotel package serializer
-            package_serializer = serializers.PackageSerializer(data = request.data)
+            package_serializer = serializers.FlightsHotelPackageSerializer(data = request.data)
             if package_serializer.is_valid():
                 # TODO: Use services.package_service
                 offlineFlightData = self.getOfflineFlightsResult(data = request.data)

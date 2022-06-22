@@ -12,7 +12,7 @@ def find_best_packages(flight_results: list, hotel_deals: list) -> list:
                 (float(hotel['price']) != 0) & 
                 (float(flight['price']) != 0)
             ):
-                total_price = float(flight['price']) + (float(hotel['price'])*hotel['tripDays'])
+                total_price = float(flight['price']) + (float(hotel['price']))
                 best.append({
                     'outbounddate' : flight['outbounddate'],
                     'inbounddate' : flight['inbounddate'],
