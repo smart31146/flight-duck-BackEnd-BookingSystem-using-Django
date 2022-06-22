@@ -23,6 +23,7 @@ Django==3.2.4
 django-allauth==0.45.0
 django-cors-headers==3.10.0
 django-crispy-forms==1.11.2
+django-environ==0.8.1
 django-heroku==0.3.1
 django-import-export==2.5.0
 django-oauth-toolkit==1.5.0

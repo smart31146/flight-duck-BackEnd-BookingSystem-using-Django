@@ -21,6 +21,8 @@ from django.db.models import Q
 from hotels import views as hotels_view
 from hotels.views import getHotelDetailsBasedOnCode
 import traceback
+from .services import package_service
+from backend import settings
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -411,9 +413,9 @@ class CacheFlightHotelsPackage(APIView):
             "Accept-Encoding":"gzip",
             "Content-Type": "application/json"
         }
-        hotelsList = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
+        # hotelsList = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
         # print("hotelsList========", hotelsList)
-        date = datetime.datetime.strptime(requestData['outbounddate'], '%Y-%m-%d')
+        date = datetime.datetime.strptime(requestData['outbound_date'], '%Y-%m-%d')
         numberOfMonthsToTry = date.month + requestData['number_of_extended_months']
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(requestData['trip_days'])
@@ -453,7 +455,7 @@ class CacheFlightHotelsPackage(APIView):
                     },
                     "occupancies": [
                         {
-                            "rooms": requestData['rooms'],
+                            # "rooms": requestData['rooms'],
                             "adults": requestData['adults'],
                             "children": requestData['children']
                         }
@@ -608,8 +610,9 @@ class CacheFlightHotelsPackage(APIView):
                 user.save()
             
             ## flights hotel package serializer
-            package_serializer = serializers.FlightsHotelPackageSerializer(data = request.data)
+            package_serializer = serializers.PackageSerializer(data = request.data)
             if package_serializer.is_valid():
+                # TODO: Use services.package_service
                 offlineFlightData = self.getOfflineFlightsResult(data = request.data)
                 # offlineFlightData = []
                 hotelDeals = self.getHotelDeals(requestData = request.data)
@@ -618,7 +621,7 @@ class CacheFlightHotelsPackage(APIView):
                     'message': 'Success',
                     'list': finalList
                 }, status=status.HTTP_200_OK)
-                
+
             return Response(package_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
