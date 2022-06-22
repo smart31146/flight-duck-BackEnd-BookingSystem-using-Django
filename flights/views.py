@@ -289,13 +289,14 @@ class FlightLivePrices(APIView):
 
     def post(self, request, *args, **kwargs):
         user_id = request.data['user_id']
+        print("THIS IS REQUEST")
+        print(request.data)
         if user_id:
             userExists = NewUser.objects.filter(id=user_id).all()
             ## user serializer.. will help to log the details for search history
             user = user_serializer.AddFlightSearchHistory(data = request.data)
             if user.is_valid():
                 user.save()
-            
             ## flights serializer
             print("WE ARE IN THE SERIALIZER")
             serializer = serializers.FlightsLiveModelFormSerializer(data = request.data)
@@ -311,6 +312,7 @@ class FlightLivePrices(APIView):
                     'originplace': request.data['originplace'],
                     'destinationplace': request.data['destinationplace'],
                     'outbounddate': request.data['outbounddate'],
+                    'inbounddate': request.data['inbounddate'],
                     'adults': request.data['adults'],
                     'apikey': FLIGHTS_API_KEY
                 }
@@ -322,13 +324,14 @@ class FlightLivePrices(APIView):
                     liveFlightsPricingURL,
                     data=data
                 )
-                print(result)
-            else:
-                print("SERIALIZER is not valid")
+                print("below is status code")
+                print(result.status_code)
 
                 if (result.status_code == 201):
+                    print("SUCCESS")
                     self.sessionToken = result.headers.get('Location').split('/')[-1]
                     results = self.getPollResults()
+                    print(results)
                     return Response({
                         'message': 'Found {} results'.format(len(results['list'])), 
                         'list': results['list'],
@@ -372,7 +375,6 @@ class CacheFlightHotelsPackage(APIView):
                     outboundDate = datetime.datetime.strptime(quotes['OutboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
                     inboundDate = datetime.datetime.strptime(quotes['InboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
                     daysBetween = inboundDate - outboundDate
-                    print(daysBetween.days)
                     # print(quotes['MinPrice'])
                     if len(jsonResult['Quotes']) > 0:
                         if daysBetween.days == tripDays:
@@ -388,14 +390,16 @@ class CacheFlightHotelsPackage(APIView):
             # print("for date====", departureDate)
             # print()
             finalFlightsList.append({
-                'outbounddate': departureDate,
-                'inbounddate': returnDate,
+                'outbounddate': '01/08/2022',
+                'inbounddate': '04/08/2022',
                 'carrier_name': '',
                 'price': 0
             })
         # if currentMonthWasIncreased == True:
         #     currentMonth = int(currentMonth)-1
         #     print("THIS IS FLIGHTS", finalFlightsList)
+        print("BELOW IS FLIGHT[3]")
+        print(finalFlightsList[3])
         return finalFlightsList
 
     def getHotelDeals(self, requestData):
