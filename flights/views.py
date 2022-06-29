@@ -400,8 +400,8 @@ class CacheFlightHotelsPackage(APIView):
         # if currentMonthWasIncreased == True:
         #     currentMonth = int(currentMonth)-1
         #     print("THIS IS FLIGHTS", finalFlightsList)
-        print("BELOW IS FLIGHT[3]")
-        print(finalFlightsList[3])
+        # print("BELOW IS FLIGHT[3]")
+        # print(finalFlightsList[3])
         return finalFlightsList
 
     def getHotelDeals(self, requestData):
@@ -420,6 +420,7 @@ class CacheFlightHotelsPackage(APIView):
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(requestData['trip_days'])
         finalHotelsList = []
+        graphList = []
         for currentMonth in range(date.month, numberOfMonthsToTry+1):
             if currentMonth<10:
                 currentMonth = "0"+str(currentMonth)
@@ -447,7 +448,7 @@ class CacheFlightHotelsPackage(APIView):
                 if returnDay<10:
                     returnDay = "0"+str(returnDay)
                 returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
-                
+
                 data = {
                     "stay": {
                         "checkIn": departureDate,
@@ -479,6 +480,8 @@ class CacheFlightHotelsPackage(APIView):
                     hotel_object = {}
                     if (jsonData.get('hotels', None)):
                         cheapestHotel = jsonData['hotels'].get('hotels', None)
+                        print("SIZE OF ARRAY BELOW")
+                        print(len(cheapestHotel))
                         # print("cheapest hotel==========", cheapestHotel)
                         if cheapestHotel:
                             hotel_name = cheapestHotel[0]['name']
