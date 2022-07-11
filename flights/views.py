@@ -15,6 +15,7 @@ import hashlib
 import time
 import requests
 import json
+import random
 from calendar import monthrange
 from django.forms.models import model_to_dict
 from django.db.models import Q
@@ -23,6 +24,7 @@ from hotels.views import getHotelDetailsBasedOnCode
 import traceback
 from .services import package_service
 from backend import settings
+import numpy as np
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -376,10 +378,12 @@ class CacheFlightHotelsPackage(APIView):
                 for quotes in jsonResult['Quotes']:
                     outboundDate = datetime.datetime.strptime(quotes['OutboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
                     inboundDate = datetime.datetime.strptime(quotes['InboundLeg']['DepartureDate'].split("T")[0], '%Y-%m-%d').date()
+
                     daysBetween = inboundDate - outboundDate
                     # print(quotes['MinPrice'])
                     if len(jsonResult['Quotes']) > 0:
                         if daysBetween.days == tripDays:
+                            print(outboundDate, " TO ", inboundDate)
                             finalFlightsList.append({
                                 'outbounddate': quotes['OutboundLeg']['DepartureDate'].split("T")[0],
                                 'inbounddate': quotes['InboundLeg']['DepartureDate'].split("T")[0],
@@ -400,11 +404,12 @@ class CacheFlightHotelsPackage(APIView):
         # if currentMonthWasIncreased == True:
         #     currentMonth = int(currentMonth)-1
         #     print("THIS IS FLIGHTS", finalFlightsList)
-        # print("BELOW IS FLIGHT[3]")
+        print("BELOW IS finalFlightsList")
         # print(finalFlightsList[3])
+        print(len(finalFlightsList))
         return finalFlightsList
 
-    def getHotelDeals(self, requestData):
+    def getHotelDeals(self, requestData, flightList):
         liveHotelsPricingURL = HOTELS_API_URL + '/hotel-api/1.0/hotels'
         headers_dict = {
             "Api-key": HOTELS_API_KEY,
@@ -421,38 +426,18 @@ class CacheFlightHotelsPackage(APIView):
         tripDays = int(requestData['trip_days'])
         finalHotelsList = []
         graphList = []
-        for currentMonth in range(date.month, numberOfMonthsToTry+1):
-            if currentMonth<10:
-                currentMonth = "0"+str(currentMonth)
-            start_day = 1
-            if date.month == int(currentMonth):
-                start_day = date.day
-            for day in range(start_day, numberOfDaysInMonth[1]+1):
-                departureDate : str
-                returnDate : str
-                currentMonthWasIncreased = False
-                day = int(day)
-                returnDay = int(day+tripDays)
-                currentMonth = int(currentMonth)
-                if day<10:
-                    day = "0"+str(day)
-                if int(currentMonth)<10:
-                    currentMonth = "0"+str(currentMonth)
-                departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
-                if returnDay>numberOfDaysInMonth[1]:
-                    returnDay = returnDay-numberOfDaysInMonth[1]
-                    currentMonth = int(currentMonth)+1
-                    currentMonthWasIncreased = True
-                    if currentMonth<10:
-                        currentMonth = "0"+str(currentMonth)
-                if returnDay<10:
-                    returnDay = "0"+str(returnDay)
-                returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
+        print("below is type")
+        flightObj = flightList[0]['outbounddate']
+        print(flightObj)
+        print(type(flightObj))
+        for i in flightList:
+                outBoundDate = i['outbounddate']
+                inBoundDate = i['inbounddate']
 
                 data = {
                     "stay": {
-                        "checkIn": departureDate,
-                        "checkOut": returnDate
+                        "checkIn": outBoundDate,
+                        "checkOut": inBoundDate,
                     },
                     "occupancies": [
                         {
@@ -468,101 +453,94 @@ class CacheFlightHotelsPackage(APIView):
                         "hotel": list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
                     }
                 }
+                # print(liveHotelsPricingURL)
+                # print(data)
                 try:
                     result = requests.post(
                         liveHotelsPricingURL,
                         json=data,
                         headers=headers_dict
                     )
+                    print(liveHotelsPricingURL)
                     # print("result======", result.status_code)
                     result.raise_for_status()
                     jsonData = json.loads(result.text)
                     hotel_object = {}
                     if (jsonData.get('hotels', None)):
-                        cheapestHotel = jsonData['hotels'].get('hotels', None)
-                        print("SIZE OF ARRAY BELOW")
-                        print(len(cheapestHotel))
-                        # print("cheapest hotel==========", cheapestHotel)
-                        if cheapestHotel:
-                            hotel_name = cheapestHotel[0]['name']
-                            hotel_city = cheapestHotel[0]['destinationName']
-                            cheapestPrice = cheapestHotel[0]['minRate']
-                            cheapestHotelCode = cheapestHotel[0]['code']
-                            complete_object = cheapestHotel
-                            for i in cheapestHotel:
-                                if ((i['minRate']<cheapestPrice) & (hotelModels.HotelDetail.objects.filter(code=i['code']).first() is not None)):
-                                    hotel_name = i['name']
-                                    hotel_city = i['destinationName']
-                                    cheapestPrice = i['minRate']
-                                    cheapestHotelCode = i['code']
-                                    complete_object = i
-                                    
-                            hotel = hotelModels.HotelDetail.objects.filter(code=cheapestHotelCode).first()
-                            if hotel is not None:
-                                # print("complete object=====", complete_object)
-                                hotel_object['hotel'] = model_to_dict(hotel)['name']
-                                images = hotelModels.HotelImage.objects.filter(hotel_id=hotel.id).all()
-                                if len(images)>0:
-                                    hotel_images = [HOTELS_PHOTOS_BASE_URL + image['image_url'] for image in images.values('image_url')]
-                                    hotel_object['images'] = hotel_images
-                                    hotel_details = {}
-                                    if type(complete_object) is list:
-                                        hotel_details.update(getHotelDetailsBasedOnCode(complete_object[0]))
-                                        hotel_details['rate'] = float(complete_object[0]['minRate'])
-                                        hotel_details['rooms'] = complete_object[0]['rooms']
-                                    else:
-                                        hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
-                                        hotel_details['rate'] = float(complete_object['minRate'])
-                                        hotel_details['rooms'] = complete_object['rooms']
-                                    # print("complete object=========\n", complete_object, "\n\n")
-                                    # print("complete object===== \n", getHotelDetailsBasedOnCode(complete_object), "\n\n")
-                                    # hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
-                                    # hotel_details['rate'] = float(complete_object['minRate'])
-                                    # hotel_details['rooms'] = complete_object['rooms']
-                                    finalHotelsList.append({
-                                        'outbounddate': departureDate,
-                                        'inbounddate': returnDate,
-                                        'price': cheapestPrice,
-                                        'tripDays': tripDays,
-                                        'hotel': hotel_object,
-                                        # 'hotel_object': complete_object,
-                                        # 'hotel_object': getHotelDetailsBasedOnCode(complete_object)
-                                        'hotel_object': hotel_details
-                                    })
-                                    
-                            else:
-                                hotel_object['hotel'] = 'No Name'
-                                hotel_object['images'] = []
+                        hotelBedsList = jsonData['hotels'].get('hotels', None)
+                        # print("SIZE OF ARRAY BELOW")
+                        # print(len(hotelBedsList))
+                        # print("cheapest hotel==========", hotelBedsList)
+                        # if hotelBedsList:
+                        #     hotel_name = hotelBedsList[0]['name']
+                        #     hotel_city = hotelBedsList[0]['destinationName']
+                        #     cheapestPrice = hotelBedsList[0]['minRate']
+                        #     cheapestHotelCode = hotelBedsList[0]['code']
+                        #     complete_object = hotelBedsList
+                        random.shuffle(hotelBedsList)
+                        # TODO: What we actually want to do is take the first 5 hotels from the list and then grab the next 5 from the next api call and so on
+                        for i in hotelBedsList[:5]:
+                            # if ((i['minRate']<cheapestPrice) & (hotelModels.HotelDetail.objects.filter(code=i['code']).first() is not None)):
+                                hotel_name = i['name']
+                                hotel_city = i['destinationName']
+                                cheapestPrice = i['minRate']
+                                cheapestHotelCode = i['code']
+                                complete_object = i
 
-                                finalHotelsList.append({
-                                    'outbounddate': 'invalid-date',
-                                    'inbounddate': returnDate,
-                                    'price': cheapestPrice,
-                                    'tripDays': tripDays,
-                                    'hotel': hotel_object,
-                                    'hotel_object': complete_object[0]
-                                })
-                    
+                                hotel = hotelModels.HotelDetail.objects.filter(code=cheapestHotelCode).first()
+                                if hotel is not None:
+                                    # print("complete object=====", complete_object)
+                                    hotel_object['hotel'] = model_to_dict(hotel)['name']
+                                    images = hotelModels.HotelImage.objects.filter(hotel_id=hotel.id).all()
+                                    if len(images)>0:
+                                        hotel_images = [HOTELS_PHOTOS_BASE_URL + image['image_url'] for image in images.values('image_url')]
+                                        hotel_object['images'] = hotel_images
+                                        hotel_details = {}
+                                        if type(complete_object) is list:
+                                            hotel_details.update(getHotelDetailsBasedOnCode(complete_object[i]))
+                                            hotel_details['rate'] = float(complete_object[i]['minRate'])
+                                            hotel_details['rooms'] = complete_object[i]['rooms']
+                                        else:
+                                            hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
+                                            hotel_details['rate'] = float(complete_object['minRate'])
+                                            hotel_details['rooms'] = complete_object['rooms']
+                                        # print("complete object=========\n", complete_object, "\n\n")
+                                        # print("complete object===== \n", getHotelDetailsBasedOnCode(complete_object), "\n\n")
+                                        # hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
+                                        # hotel_details['rate'] = float(complete_object['minRate'])
+                                        # hotel_details['rooms'] = complete_object['rooms']
+                                        print(outBoundDate)
+                                        finalHotelsList.append({
+                                            'outbounddate': outBoundDate,
+                                            'inbounddate': inBoundDate,
+                                            'price': cheapestPrice,
+                                            'tripDays': tripDays,
+                                            'hotel': hotel_object,
+                                            # 'hotel_object': complete_object,
+                                            # 'hotel_object': getHotelDetailsBasedOnCode(complete_object)
+                                            'hotel_object': hotel_details
+                                        })
+
                 except requests.exceptions.HTTPError as e:
                     print("hotel requests exception========", e)
-                    print("for date====", departureDate)
+                    print("for date====", outBoundDate)
                     print()
                     finalHotelsList.append({
-                        'outbounddate': departureDate,
-                        'inbounddate': returnDate,
+                        'outbounddate': outBoundDate,
+                        'inbounddate': inBoundDate,
                         'price': 0
                     })
                 except Exception as e:
                     print("hotel exception=========", e)
-                    print("for date====", departureDate)
+                    # print("for date====", outBoundDate)
                     print("traceback========", traceback.format_exc())
                     print()
                     print()
 
-                if currentMonthWasIncreased == True:
-                    currentMonth = int(currentMonth)-1
-
-
+                # if currentMonthWasIncreased == True:
+                #     currentMonth = int(currentMonth)-1
+        print("Below is finalhotels list length")
+        print(len(finalHotelsList))
         return finalHotelsList
     
     def findBestPackages(self, offlineFlightResults, hotelDeals):
@@ -570,13 +548,23 @@ class CacheFlightHotelsPackage(APIView):
         # print("number of offline flight results=========", len(offlineFlightResults))
         # print("number of hotelDeals results=========", len(hotelDeals))
         # return []
+        # print("below is a hotel object")
+        # print(hotelDeals[0])
+        # print("below is a flight object")
+        # print(offlineFlightResults[0])
+        number = 0
+        # TODO: Use the array that is longer to iterate through
+        for hotel in hotelDeals:
+            print("hotel DATES")
+            print(hotel['outbounddate'], " TO ", hotel['inbounddate'])
+        # print("hotel price=======", hotel['price'])
+        # print()
         for flight in offlineFlightResults:
             # print("============single details======")
             # print("flight outbounddate=======", flight['outbounddate'])
             # print("flight price=======", flight['price'])
-            # print()
+            # print(flight)
             for hotel in hotelDeals:
-                # print("hotel outbounddate=======", hotel['outbounddate'])
                 # print("hotel price=======", hotel['price'])
                 # print()
                 if (
@@ -584,7 +572,11 @@ class CacheFlightHotelsPackage(APIView):
                     (float(hotel['price']) != 0) & 
                     (float(flight['price']) != 0)
                 ):
-                    
+                    number += 1
+                    print("match found")
+                    print("Total matches")
+                    print(number)
+
                     total_price = float(flight['price']) + (float(hotel['price']))
                     bestPackagesList.append({
                         'outbounddate' : flight['outbounddate'],
@@ -600,7 +592,8 @@ class CacheFlightHotelsPackage(APIView):
                         'hotel_object': hotel['hotel_object']
                     })
             # break
-
+        print("Below is bestPackages list length")
+        print(len(bestPackagesList))
         return bestPackagesList
 
     def post(self, request, *args, **kwargs):
@@ -618,7 +611,7 @@ class CacheFlightHotelsPackage(APIView):
                 # TODO: Use services.package_service
                 offlineFlightData = self.getOfflineFlightsResult(data = request.data)
                 # offlineFlightData = []
-                hotelDeals = self.getHotelDeals(requestData = request.data)
+                hotelDeals = self.getHotelDeals(requestData = request.data, flightList = offlineFlightData)
                 finalList = self.findBestPackages(offlineFlightData, hotelDeals)
                 return Response({
                     'message': 'Success',
