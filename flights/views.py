@@ -348,11 +348,6 @@ class FlightLivePrices(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
 
 class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
@@ -415,6 +410,15 @@ class CacheFlightHotelsPackage(APIView):
         print(len(finalFlightsList))
         return finalFlightsList
 
+    def list_split(self, listA, n):
+        for x in range(0, len(listA), n):
+            every_chunk = listA[x: n+x]
+
+            if len(every_chunk) < n:
+                every_chunk = every_chunk + \
+                    []
+            yield every_chunk
+
     def getHotelDeals(self, requestData, flightList):
         liveHotelsPricingURL = HOTELS_API_URL + '/hotel-api/1.0/hotels'
         headers_dict = {
@@ -440,12 +444,16 @@ class CacheFlightHotelsPackage(APIView):
         # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))[0])
         # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True)))
         hotelCodes = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
-        hotelListDivided = np.array_split(hotelCodes, len(flightList))
+        # hotelListDivided = np.array_split(hotelCodes, len(flightList))
+        print("below is hotelCodes")
+        print(len(hotelCodes))
+        divideBy = int(int(len(hotelCodes)) / (int(len(flightList))))
+        hotelListDivided = list(self.list_split(hotelCodes, divideBy))
 
-        print("this is divided 0")
-        print(hotelListDivided[0])
-        print("this is divided length")
-        print(len(hotelListDivided))
+        # print("this is divided 0")
+        # print(hotelListDivided[0])
+        # print("this is divided length")
+        # print(len(hotelListDivided))
         # print("this is flights len")
         # print(len(flightList))
         # print("EQUATUION")
@@ -454,12 +462,17 @@ class CacheFlightHotelsPackage(APIView):
         # print(hotelCodesLength)
         # print("this is flights length")
         # print(len(flightList))
-        yousee = json_dump = json.dumps(hotelListDivided,
-                       cls=NumpyEncoder)
-        print(json_dump)
+        # yousee = json_dump = json.dumps(hotelListDivided,
+        #                cls=NumpyEncoder)
+        # print(json_dump)
         # yousee = pd.Series(hotelListDivided).to_json(orient='values')
 
         currentHotelListSection = 0
+
+        print("This is flight list that is being passed to the loop")
+        print(len(flightList))
+        print("This is hotel list that needs to be equal or less then flights")
+        print(len(hotelListDivided))
 
 
         for i in flightList:
@@ -470,11 +483,6 @@ class CacheFlightHotelsPackage(APIView):
                 print(currentHotelListSection)
                 outBoundDate = i['outbounddate']
                 inBoundDate = i['inbounddate']
-                yousee2 = json.dumps(hotelListDivided[currentHotelListSection],
-                       cls=NumpyEncoder)
-                print("START")
-                print(yousee2)
-                print("DONE")
 
                 data = {
                     "stay": {
@@ -492,7 +500,7 @@ class CacheFlightHotelsPackage(APIView):
                     #     "code": requestData['destination_code']
                     # }
                     "hotels": {
-                        "hotel": yousee2
+                        "hotel": hotelListDivided[currentHotelListSection]
                     }
                 }
                 # print(liveHotelsPricingURL)
@@ -504,7 +512,10 @@ class CacheFlightHotelsPackage(APIView):
                         headers=headers_dict
                     )
                     print(data)
-                    currentHotelListSection += 1
+                    if (currentHotelListSection == len(hotelListDivided)-1):
+                        currentHotelListSection = 0
+                    else:
+                        currentHotelListSection += 1
 
                     # print("result======", result.status_code)
                     result.raise_for_status()
@@ -512,6 +523,9 @@ class CacheFlightHotelsPackage(APIView):
                     hotel_object = {}
                     if (jsonData.get('hotels', None)):
                         hotelBedsList = jsonData['hotels'].get('hotels', None)
+                        # print("this is hotel beds list")
+                        # print(hotelBedsList)
+
                         # print("SIZE OF ARRAY BELOW")
                         # print(len(hotelBedsList))
                         # print("cheapest hotel==========", hotelBedsList)
@@ -522,47 +536,51 @@ class CacheFlightHotelsPackage(APIView):
                         #     cheapestHotelCode = hotelBedsList[0]['code']
                         #     complete_object = hotelBedsList
                         # TODO: What we actually want to do is take the first 5 hotels from the list and then grab the next 5 from the next api call and so on
-                        for i in hotelBedsList[:5]:
-                            # if ((i['minRate']<cheapestPrice) & (hotelModels.HotelDetail.objects.filter(code=i['code']).first() is not None)):
-                                hotel_name = i['name']
-                                hotel_city = i['destinationName']
-                                cheapestPrice = i['minRate']
-                                cheapestHotelCode = i['code']
-                                complete_object = i
+                        if(hotelBedsList is not None):
+                            for i in hotelBedsList:
+                                # if ((i['minRate']<cheapestPrice) & (hotelModels.HotelDetail.objects.filter(code=i['code']).first() is not None)):
+                                    hotel_name = i['name']
+                                    hotel_city = i['destinationName']
+                                    cheapestPrice = i['minRate']
+                                    cheapestHotelCode = i['code']
+                                    complete_object = i
 
-                                hotel = hotelModels.HotelDetail.objects.filter(code=cheapestHotelCode).first()
-                                if hotel is not None:
-                                    # print("complete object=====", complete_object)
-                                    hotel_object['hotel'] = model_to_dict(hotel)['name']
-                                    images = hotelModels.HotelImage.objects.filter(hotel_id=hotel.id).all()
-                                    if len(images)>0:
-                                        hotel_images = [HOTELS_PHOTOS_BASE_URL + image['image_url'] for image in images.values('image_url')]
-                                        hotel_object['images'] = hotel_images
-                                        hotel_details = {}
-                                        if type(complete_object) is list:
-                                            hotel_details.update(getHotelDetailsBasedOnCode(complete_object[i]))
-                                            hotel_details['rate'] = float(complete_object[i]['minRate'])
-                                            hotel_details['rooms'] = complete_object[i]['rooms']
-                                        else:
-                                            hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
-                                            hotel_details['rate'] = float(complete_object['minRate'])
-                                            hotel_details['rooms'] = complete_object['rooms']
-                                        # print("complete object=========\n", complete_object, "\n\n")
-                                        # print("complete object===== \n", getHotelDetailsBasedOnCode(complete_object), "\n\n")
-                                        # hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
-                                        # hotel_details['rate'] = float(complete_object['minRate'])
-                                        # hotel_details['rooms'] = complete_object['rooms']
-                                        print(outBoundDate)
-                                        finalHotelsList.append({
-                                            'outbounddate': outBoundDate,
-                                            'inbounddate': inBoundDate,
-                                            'price': cheapestPrice,
-                                            'tripDays': tripDays,
-                                            'hotel': hotel_object,
-                                            # 'hotel_object': complete_object,
-                                            # 'hotel_object': getHotelDetailsBasedOnCode(complete_object)
-                                            'hotel_object': hotel_details
-                                        })
+                                    hotel = hotelModels.HotelDetail.objects.filter(code=cheapestHotelCode).first()
+
+                                    if hotel is None:
+                                        print("hotel is none")
+                                    if hotel is not None:
+                                        # print("complete object=====", complete_object)
+                                        hotel_object['hotel'] = model_to_dict(hotel)['name']
+                                        images = hotelModels.HotelImage.objects.filter(hotel_id=hotel.id).all()
+                                        if len(images)>0:
+                                            hotel_images = [HOTELS_PHOTOS_BASE_URL + image['image_url'] for image in images.values('image_url')]
+                                            hotel_object['images'] = hotel_images
+                                            hotel_details = {}
+                                            if type(complete_object) is list:
+                                                hotel_details.update(getHotelDetailsBasedOnCode(complete_object[i]))
+                                                hotel_details['rate'] = float(complete_object[i]['minRate'])
+                                                hotel_details['rooms'] = complete_object[i]['rooms']
+                                            else:
+                                                hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
+                                                hotel_details['rate'] = float(complete_object['minRate'])
+                                                hotel_details['rooms'] = complete_object['rooms']
+                                            # print("complete object=========\n", complete_object, "\n\n")
+                                            # print("complete object===== \n", getHotelDetailsBasedOnCode(complete_object), "\n\n")
+                                            # hotel_details.update(getHotelDetailsBasedOnCode(complete_object))
+                                            # hotel_details['rate'] = float(complete_object['minRate'])
+                                            # hotel_details['rooms'] = complete_object['rooms']
+                                            print(outBoundDate)
+                                            finalHotelsList.append({
+                                                'outbounddate': outBoundDate,
+                                                'inbounddate': inBoundDate,
+                                                'price': cheapestPrice,
+                                                'tripDays': tripDays,
+                                                'hotel': hotel_object,
+                                                # 'hotel_object': complete_object,
+                                                # 'hotel_object': getHotelDetailsBasedOnCode(complete_object)
+                                                'hotel_object': hotel_details
+                                            })
 
                 except requests.exceptions.HTTPError as e:
                     print("hotel requests exception========", e)
