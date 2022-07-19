@@ -25,6 +25,8 @@ import traceback
 from .services import package_service
 from backend import settings
 import numpy as np
+import pandas as pd
+import codecs
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -346,7 +348,11 @@ class FlightLivePrices(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
-
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
@@ -428,11 +434,47 @@ class CacheFlightHotelsPackage(APIView):
         graphList = []
         print("below is type")
         flightObj = flightList[0]['outbounddate']
-        print(flightObj)
-        print(type(flightObj))
+        # print(flightObj)
+        # print(type(flightObj))
+        # print("DOPES THIS WORKWE:@??????? HELLO HELLO HELLO AYE AYE AYE FR FR FR ")
+        # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))[0])
+        # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True)))
+        hotelCodes = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
+        hotelListDivided = np.array_split(hotelCodes, len(flightList))
+
+        print("this is divided 0")
+        print(hotelListDivided[0])
+        print("this is divided length")
+        print(len(hotelListDivided))
+        # print("this is flights len")
+        # print(len(flightList))
+        # print("EQUATUION")
+        # print(yep)
+        # print("this is hotel codes length")
+        # print(hotelCodesLength)
+        # print("this is flights length")
+        # print(len(flightList))
+        yousee = json_dump = json.dumps(hotelListDivided,
+                       cls=NumpyEncoder)
+        print(json_dump)
+        # yousee = pd.Series(hotelListDivided).to_json(orient='values')
+
+        currentHotelListSection = 0
+
+
         for i in flightList:
+                # algo to divide array into 5's (but play around) and then loop through that array on the condition that if the next set of numbers is greater then grab the last numbers and
+                # restart the loop
+                # Above this loop we divide the hotel codes list based on the amount of flightlist dates so we get all numbers. Then hit them
+                print("this is current hotel list section")
+                print(currentHotelListSection)
                 outBoundDate = i['outbounddate']
                 inBoundDate = i['inbounddate']
+                yousee2 = json.dumps(hotelListDivided[currentHotelListSection],
+                       cls=NumpyEncoder)
+                print("START")
+                print(yousee2)
+                print("DONE")
 
                 data = {
                     "stay": {
@@ -450,7 +492,7 @@ class CacheFlightHotelsPackage(APIView):
                     #     "code": requestData['destination_code']
                     # }
                     "hotels": {
-                        "hotel": list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
+                        "hotel": yousee2
                     }
                 }
                 # print(liveHotelsPricingURL)
@@ -461,7 +503,9 @@ class CacheFlightHotelsPackage(APIView):
                         json=data,
                         headers=headers_dict
                     )
-                    print(liveHotelsPricingURL)
+                    print(data)
+                    currentHotelListSection += 1
+
                     # print("result======", result.status_code)
                     result.raise_for_status()
                     jsonData = json.loads(result.text)
@@ -477,7 +521,6 @@ class CacheFlightHotelsPackage(APIView):
                         #     cheapestPrice = hotelBedsList[0]['minRate']
                         #     cheapestHotelCode = hotelBedsList[0]['code']
                         #     complete_object = hotelBedsList
-                        random.shuffle(hotelBedsList)
                         # TODO: What we actually want to do is take the first 5 hotels from the list and then grab the next 5 from the next api call and so on
                         for i in hotelBedsList[:5]:
                             # if ((i['minRate']<cheapestPrice) & (hotelModels.HotelDetail.objects.filter(code=i['code']).first() is not None)):
