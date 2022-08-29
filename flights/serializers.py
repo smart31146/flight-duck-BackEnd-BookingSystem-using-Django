@@ -10,12 +10,20 @@ class AutoSuggestModelFormSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.AutoSuggestModel
         fields = '__all__'
+        extra_kwargs = {
+            'user_id' : {'required' : False}, # define the 'user' field as 'read-only'
+            'inbounddate' : {'required' : False} # define the 'user' field as 'read-only'
+        }
 
 class BrowseRouteModelFormSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.BrowseRouteModel
         fields = '__all__'
+        extra_kwargs = {
+            'user_id' : {'required' : False}, # define the 'user' field as 'read-only'
+            'inbounddate' : {'required' : False} # define the 'user' field as 'read-only'
+        }
 
 class FlightsLiveModelFormSerializer(serializers.ModelSerializer):
 
@@ -23,7 +31,8 @@ class FlightsLiveModelFormSerializer(serializers.ModelSerializer):
         model = models.FlightsLiveModel
         fields = '__all__'
         extra_kwargs = {
-            'user_id' : {'required' : False} # define the 'user' field as 'read-only'
+            'user_id' : {'required' : False}, # define the 'user' field as 'read-only'
+            'inbounddate' : {'required' : False} # define the 'user' field as 'read-only'
         }
 
 class PackageSerializer(serializers.ModelSerializer):
@@ -32,7 +41,8 @@ class PackageSerializer(serializers.ModelSerializer):
         model = models.PackageModel
         fields = '__all__'
         extra_kwargs = {
-            'user_id' : {'required': False}
+            'user_id' : {'required': False},
+            'inbounddate' : {'required' : False} # define the 'user' field as 'read-only'
         }
 
 # TODO: Remove if redundant
@@ -42,5 +52,6 @@ class FlightsHotelPackageSerializer(serializers.ModelSerializer):
         model = models.FlightsHotelPackageModel
         fields = '__all__'
         extra_kwargs = {
-            'user_id' : {'required' : False} # define the 'user' field as 'read-only'
+            'user_id' : {'required' : False}, # define the 'user' field as 'read-only'
+            'inbounddate' : {'required' : False} # define the 'user' field as 'read-only'
         }
