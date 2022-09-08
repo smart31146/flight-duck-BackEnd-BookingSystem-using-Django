@@ -425,18 +425,89 @@ class CacheFlightHotelsPackage(APIView):
             })
         return finalFlightsList
 
+    def getLiveFlightsWhenNoResultsForCache(self, data):
+        date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
+        numberOfMonthsToTry = date.month + data['number_of_extended_months']
+        numberOfDaysInMonth = monthrange(date.year, date.month)
+        tripDays = int(data['trip_days'])
+        finalFlightsList = []
+        for currentMonth in range(date.month, numberOfMonthsToTry+1):
+            if currentMonth<10:
+                currentMonth = "0"+str(currentMonth)
+            start_day = 1
+            if date.month == int(currentMonth):
+                start_day = date.day
+            for day in range(start_day, numberOfDaysInMonth[1]+1):
+                departureDate : str
+                returnDate : str
+                currentMonthWasIncreased = False
+                day = int(day)
+                returnDay = int(day+tripDays)
+                currentMonth = int(currentMonth)
+                if day<10:
+                    day = "0"+str(day)
+                if int(currentMonth)<10:
+                    currentMonth = "0"+str(currentMonth)
+                departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
+                if returnDay>numberOfDaysInMonth[1]:
+                    returnDay = returnDay-numberOfDaysInMonth[1]
+                    currentMonth = int(currentMonth)+1
+                    currentMonthWasIncreased = True
+                    if currentMonth<10:
+                        currentMonth = "0"+str(currentMonth)
+                if returnDay<10:
+                    returnDay = "0"+str(returnDay)
+                returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
+
+                country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
+
+                flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
+                    FLIGHTS_API_URL, data['country'], data['currency_format'],
+                    data['originplace'], data['destinationplace'],
+                    departureDate, returnDate)
+
+                print(flightsBrowseRoutesURL)
+
+                try:
+                    result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+                    result.raise_for_status()
+                    jsonResult = json.loads(result.text)
+                    print(jsonResult)
+
+                    if jsonResult.get('Quotes', None):
+                        if len(jsonResult['Quotes'])>0:
+                            finalFlightsList.append({
+                                'outbounddate': departureDate,
+                                'inbounddate': returnDate,
+                                'carrier_name': jsonResult['Carriers'][0]['Name'],
+                                'price': jsonResult['Quotes'][0]['MinPrice'],
+                                'country': model_to_dict(country_name)['country_name']
+                            })
+                except requests.exceptions.HTTPError as e:
+                    print("flight requests exception========", e)
+                    print("for date====", departureDate)
+                    print()
+                    finalFlightsList.append({
+                        'outbounddate': departureDate,
+                        'inbounddate': returnDate,
+                        'carrier_name': '',
+                        'price': 0
+                    })
+                if currentMonthWasIncreased == True:
+                    currentMonth = int(currentMonth)-1
+                    print("THIS IS FLIGHTS", finalFlightsList)
+        return finalFlightsList
+
+
     def getOfflineFlightsResult(self, data):
         tripDays = int(data['trip_days'])
         finalFlightsList = []
         # make below into a function then we will call it with the days variable and if returned 0 then we add 1 to the days and try again. If that doesnt work then - 1 and then if that doesnt work then thats it.
         # Also if the return date is in the same month and its more days then whats left in the month then we go to the next month. Watch out for double digits!
         finalFlightsList = self.hitFlightUrl(data, tripDays)
-        if len(finalFlightsList) == 0:
-            finalFlightsList = self.hitFlightUrl(data, tripDays + 1)
+        if len(finalFlightsList) < 3:
             print("god i hope this works")
-            if len(finalFlightsList) == 0:
-                print("we at the end fr fr")
-                finalFlightsList = self.hitFlightUrl(data, tripDays - 1)
+            finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
         return finalFlightsList
 
     def list_split(self, listA, n):
@@ -476,6 +547,8 @@ class CacheFlightHotelsPackage(APIView):
             hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code',
                                                                                                                  flat=True))
         # hotelListDivided = np.array_split(hotelCodes, len(flightList))
+        print("below is destination code")
+        print(requestData['destination_code'])
         print("below is hotelCodes")
         print(len(hotelCodes))
         divideBy = int(int(len(hotelCodes)) / (int(len(flightList))))
