@@ -27,6 +27,7 @@ from backend import settings
 import numpy as np
 import pandas as pd
 import codecs
+from pprint import pprint
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -218,19 +219,20 @@ class LiveFlightsData:
         }
 
     def getLegDetails(self, id):
-        for leg in self.flightsData['Legs']:
+        for leg in self.flightsData['content']['results']['legs']:
             if leg['Id'] == id:
-                origin_station = self.getPlaces(leg['OriginStation'])
-                destination_station = self.getPlaces(leg['DestinationStation'])
-                departure = self.processTravelDate(leg['Departure'])
-                arrival = self.processTravelDate(leg['Arrival'])
-                total_duration = leg['Duration']
+                origin_station = self.getPlaces(leg['originPlaceId'])
+                destination_station = self.getPlaces(leg['destinationPlaceId'])
+                departure = self.processTravelDate(leg['departureDateTime']['year'])
+                arrival = self.processTravelDate(leg['arrivalDateTime']['year'])
+#                 TODO FIX SO IT HAS THE ENTIRE DATE
+                total_duration = leg['durationInMinutes']
                 days = int(total_duration / 1440)  # 1440 -> total minutes in a day
                 left_minutes = total_duration % 1440
                 hours = int(left_minutes / 60)
                 minutes = total_duration - (days * 1440) - (hours * 60)
-                number_of_stops = len(leg['Stops'])
-                carriers = self.getCarrier(leg['Carriers'][0])
+                number_of_stops = len(leg['stopCount'])
+                carriers = self.getCarrier(leg['operatingCarrierIds'][0])
 
                 return {
                     'origin_station': origin_station,
@@ -267,10 +269,31 @@ class LiveFlightsData:
     def processFlights(self):
         finalList = {}
         processedData = []
+        print("processFlightsprocessFlightsprocessFlightsprocessFlightsprocessFlights")
+        # print(self.flightsData['content']['results']['itineraries'])
 
-        for flight in self.flightsData['Itineraries']:
+        # flightDataItinerariesList = list(self.flightsData.items())
+        flightDataItinerariesList = list(self.flightsData['content']['results']['itineraries'].items())
+
+        # print(type(flightDataItinerariesList[3][0][0][0]))
+        # print(flightDataItinerariesList[3][0][0][0])
+
+
+        # aList = list(flightDataItinerariesList[0])
+        #
+        # aList2 = list(aList[1])
+        #
+        # aList3 = list(aList2[0])
+        #
+        # print(aList3)
+
+
+
+        for flight in self.flightsData['content']['results']['itineraries']:
             details = {}
-            details.update(self.getLegDetails(flight['OutboundLegId']))
+            print("below is flight leg ids")
+            print(flight[2])
+            details.update(self.getLegDetails(flightDataItinerariesList[0][0]))
             details['price'] = flight['PricingOptions'][0]['Price']
             details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl']
             details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0])
@@ -290,9 +313,11 @@ class FlightLivePrices(APIView):
     print("WE ARE IN THE FLIGHT LIVE PRICES")
 
     def getPollResults(self):
-        pollResultsURL = FLIGHTS_API_URL + 'pricing/v1.0/' + self.sessionToken + "?apikey=" + FLIGHTS_API_KEY
-        result = requests.get(
-            pollResultsURL
+        pollResultsURL = FLIGHTS_API_URL + 'v3/flights/live/search/poll/' + self.sessionToken
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+        print(headers)
+        result = requests.post(
+            pollResultsURL, headers=headers,
         )
 
         if (result.status_code == 200):
@@ -315,56 +340,76 @@ class FlightLivePrices(APIView):
                 user.save()
             ## flights serializer
             print("WE ARE IN THE SERIALIZER")
+            headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
             serializer = serializers.FlightsLiveModelFormSerializer(data=request.data)
             if serializer.is_valid():
                 print("SERIALIZER is valid")
                 if "inbounddate" in request.data:
                     print("WE ARE IN THE INBOUND DATE")
-                    liveFlightsPricingURL = FLIGHTS_API_URL + 'pricing/v1.0'
+                    liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
                     data = {
-                        'country': request.data['country'],
+                    "query": {
+                        'market': request.data['country'],
                         'currency': request.data['currency'],
                         'locale': request.data['locale'],
-                        'locationSchema': 'iata',
-                        'originplace': request.data['originplace'],
-                        'destinationplace': request.data['destinationplace'],
-                        'outbounddate': request.data['outbounddate'],
-                        'inbounddate': request.data['inbounddate'],
                         'adults': request.data['adults'],
-                        'apikey': FLIGHTS_API_KEY
+                        "queryLegs": [
+                            {
+                                "originPlaceId": {
+                                    "iata": request.data['originplace'].removesuffix('-sky')
+                                },
+                                "destinationPlaceId": {
+                                    "iata": request.data['destinationplace'].removesuffix('-sky')
+                                },
+                                "date": {
+                                    "year": 2022,
+                                    "month": 12,
+                                    "day": 14
+                                }
+                            }
+                         ],
+                        "childrenAges": [],
+                        "cabinClass": "CABIN_CLASS_ECONOMY",
+                        "excludedAgentsIds": [],
+                        "excludedCarriersIds": [],
+                        "includedAgentsIds": [],
+                        "includedCarriersIds": []
                     }
-                else:
-                    liveFlightsPricingURL = FLIGHTS_API_URL + 'pricing/v1.0'
-                    data = {
-                        'country': request.data['country'],
-                        'currency': request.data['currency'],
-                        'locale': request.data['locale'],
-                        'locationSchema': 'iata',
-                        'originplace': request.data['originplace'],
-                        'destinationplace': request.data['destinationplace'],
-                        'outbounddate': request.data['outbounddate'],
-                        'adults': request.data['adults'],
-                        'apikey': FLIGHTS_API_KEY
-                    }
+                  }
+#                 else:
+#                     liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
+#                     data = {
+#                         'country': request.data['country'],
+#                         'currency': request.data['currency'],
+#                         'locale': request.data['locale'],
+#                         'locationSchema': 'iata',
+#                         'originplace': request.data['originplace'],
+#                         'destinationplace': request.data['destinationplace'],
+#                         'outbounddate': request.data['outbounddate'],
+#                         'adults': request.data['adults'],
+#                         'apikey': FLIGHTS_API_KEY
+#                     }
                 print("THIS IS DATA")
                 print(data)
                 print("THIS IS URL")
                 print(liveFlightsPricingURL)
                 result = requests.post(
                     liveFlightsPricingURL,
-                    data=data
+                    data=json.dumps(data),
+                    headers=headers,
                 )
                 print("below is status code")
                 print(result.status_code)
 
-                if (result.status_code == 201):
+                if (result.status_code == 200):
                     print("SUCCESS")
-                    self.sessionToken = result.headers.get('Location').split('/')[-1]
+                    response_data = result.json()
+                    self.sessionToken = response_data['sessionToken']
                     results = self.getPollResults()
                     return Response({
-                        'message': 'Found {} results'.format(len(results['list'])),
-                        'list': results['list'],
-                        'currency': results['currency']
+                        'message': 'Found {} results'.format(len(results['content']['results']['legs'])),
+                        'list': results['content']['results']['legs'],
                     }, status=status.HTTP_200_OK)
                 else:
                     return Response({'message': 'Search query is invalid'},
