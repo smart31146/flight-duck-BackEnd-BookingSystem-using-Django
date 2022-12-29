@@ -22,6 +22,7 @@ from django.db.models import Q
 from hotels import views as hotels_view
 from hotels.views import getHotelDetailsBasedOnCode
 import traceback
+import sys
 from .services import package_service
 from backend import settings
 import numpy as np
@@ -209,6 +210,7 @@ class LiveFlightsData:
         self.flightsData = flightsData
 
     def processTravelDate(self, travel_date):
+        print(travel_date)
         travel_date = datetime.datetime.strptime(travel_date, "%Y-%m-%dT%H:%M:%S")
         date_str = travel_date.date()
         travel_time = travel_date.time()
@@ -219,34 +221,58 @@ class LiveFlightsData:
         }
 
     def getLegDetails(self, id):
-        for leg in self.flightsData['content']['results']['legs']:
-            if leg['Id'] == id:
-                origin_station = self.getPlaces(leg['originPlaceId'])
-                destination_station = self.getPlaces(leg['destinationPlaceId'])
-                departure = self.processTravelDate(leg['departureDateTime']['year'])
-                arrival = self.processTravelDate(leg['arrivalDateTime']['year'])
-#                 TODO FIX SO IT HAS THE ENTIRE DATE
-                total_duration = leg['durationInMinutes']
-                days = int(total_duration / 1440)  # 1440 -> total minutes in a day
-                left_minutes = total_duration % 1440
-                hours = int(left_minutes / 60)
-                minutes = total_duration - (days * 1440) - (hours * 60)
-                number_of_stops = len(leg['stopCount'])
-                carriers = self.getCarrier(leg['operatingCarrierIds'][0])
+        # details.update(self.getLegDetails(flightDataItinerariesList[0][0])) #LEGS
+        flightDataItinerariesList = list(self.flightsData['content']['results']['legs'].items())
+        # print(flightDataItinerariesList)
 
-                return {
-                    'origin_station': origin_station,
-                    'destination_station': destination_station,
-                    'departure': departure,
-                    'arrival': arrival,
-                    'total_duration': {
-                        'days': days,
-                        'hours': hours,
-                        'minutes': minutes
-                    },
-                    'number_of_stops': number_of_stops,
-                    'carriers': carriers
-                }
+        # with open('C:\games\sample.txt', 'w') as f:
+        #     print(flightDataItinerariesList, file=f)
+        # print(flightDataItinerariesList)
+
+
+        # for value in flightDataItinerariesList:
+            # print(value[0])
+            # print(value[1]['destinationPlaceId'])
+
+            # with open('C:\games\sample.txt', 'w') as f:
+            #     print(value, file=f)
+
+              # borigin_station = self.getPlaces(value['legIds']['originPlaceId'])
+              # destination_station = self.getPlaces(value['destinationPlaceId'])
+              # departure = self.processTravelDate(value['departureDateTime']['year'])
+              # arrival = self.processTravelDate(value['arrivalDateTime']['year'])
+
+        for value in flightDataItinerariesList:
+           # print(value['legIds'][0])
+         if value[0] == id:
+            print("in if")
+            print(value[0])
+            origin_station = self.getPlaces(value[1]['originPlaceId'])
+            destination_station = self.getPlaces(value[1]['destinationPlaceId'])
+            departure = self.processTravelDate(value[1]['departureDateTime']['year'])
+            arrival = self.processTravelDate((value[1]['arrivalDateTime']['year']))
+#                 TODO FIX SO IT HAS THE ENTIRE DATE
+            total_duration = value['durationInMinutes']
+            days = int(total_duration / 1440)  # 1440 -> total minutes in a day
+            left_minutes = total_duration % 1440
+            hours = int(left_minutes / 60)
+            minutes = total_duration - (days * 1440) - (hours * 60)
+            number_of_stops = len(value[1]['stopCount'])
+            carriers = self.getCarrier(value[1]['operatingCarrierIds'][0])
+
+            return {
+                'origin_station': origin_station,
+                'destination_station': destination_station,
+                'departure': departure,
+                'arrival': arrival,
+                'total_duration': {
+                    'days': days,
+                    'hours': hours,
+                    'minutes': minutes
+                },
+                'number_of_stops': number_of_stops,
+                'carriers': carriers
+            }
 
     def getAgent(self, id):
         for agent in self.flightsData['Agents']:
@@ -257,9 +283,11 @@ class LiveFlightsData:
                 }
 
     def getPlaces(self, id):
-        for place in self.flightsData['Places']:
-            if place['Id'] == id:
-                return place['Name']
+        # print(list(self.flightsData['content']['results']['places'].items()))
+        for place in list(self.flightsData['content']['results']['places'].items()):
+            print(place)
+            if place[1]['entityId'] == id:
+                return place[1]['name']
 
     def getCarrier(self, id):
         for carrier in self.flightsData['Carriers']:
@@ -270,7 +298,7 @@ class LiveFlightsData:
         finalList = {}
         processedData = []
         print("processFlightsprocessFlightsprocessFlightsprocessFlightsprocessFlights")
-        # print(self.flightsData['content']['results']['itineraries'])
+        # print(self.flightsData)
 
         # flightDataItinerariesList = list(self.flightsData.items())
         flightDataItinerariesList = list(self.flightsData['content']['results']['itineraries'].items())
@@ -286,26 +314,74 @@ class LiveFlightsData:
         # aList3 = list(aList2[0])
         #
         # print(aList3)
+        # print(type(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId']))
+        # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId'])
+
+    # details.update(self.getLegDetails(flightDataItinerariesList[0][0])) #LEGS
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['legIds'][0])
+    
+    
+    # details['price'] = flight['PricingOptions'][0]['Price'] #PRICE
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['price']['amount'])
+        
+    # details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl'] #DEEPLINK
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['deepLink'])
+
+    # details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0]) #AGENT
+    #   print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId'])
+
+        # we need price and leg ids and to loop over each key and get both
+
+        # res = next(iter(flightDataItinerariesList))
+
+        # print(res)
+
+        # we need to iterate through each key and update the methods to how we access them as above and hopefully after we are sweet
+
+        # print("check below")
+        #
+        # for key, value in flightDataItinerariesList:
+        #     print(value['pricingOptions'][0]['items'][0]['agentId'])
+        # quit()
+        # print(self.flightsData)
+
+        # for key, value in flightDataItinerariesList:
+        #     print(value['legIds'][0])
 
 
-
-        for flight in self.flightsData['content']['results']['itineraries']:
+        for key, value in flightDataItinerariesList:
             details = {}
-            print("below is flight leg ids")
-            print(flight[2])
-            details.update(self.getLegDetails(flightDataItinerariesList[0][0]))
-            details['price'] = flight['PricingOptions'][0]['Price']
-            details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl']
-            details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0])
+            details.update(self.getLegDetails(value['legIds'][0]))
+            details['price'] = value['pricingOptions'][0]['price']['amount']
+            details['booking_deep_link'] = value['pricingOptions'][0]['items'][0]['deepLink']
+            details['agent'] = self.getAgent(value['pricingOptions'][0]['items'][0]['agentId'])
             processedData.append(details)
         processedData.sort(key=lambda x: x['price'], reverse=False)
         # print("number of flights==========", len(processedData))
         # print("processed final list==========", processedData)
         processedData[0]['cheapest'] = True
 
-        finalList['currency'] = self.flightsData['Currencies'][0]['Symbol']
         finalList['list'] = processedData
         return finalList
+
+
+        # for flight in self.flightsData['content']['results']['itineraries']:
+        #     details = {}
+        #     print("below is flight leg ids")
+        #     print(flight[2])
+        #     details.update(self.getLegDetails(flightDataItinerariesList[0][0]))
+        #     details['price'] = flight['PricingOptions'][0]['Price']
+        #     details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl']
+        #     details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0])
+        #     processedData.append(details)
+        # processedData.sort(key=lambda x: x['price'], reverse=False)
+        # # print("number of flights==========", len(processedData))
+        # # print("processed final list==========", processedData)
+        # processedData[0]['cheapest'] = True
+        #
+        # finalList['currency'] = self.flightsData['Currencies'][0]['Symbol']
+        # finalList['list'] = processedData
+        # return finalList
 
 
 class FlightLivePrices(APIView):
@@ -363,8 +439,8 @@ class FlightLivePrices(APIView):
                                     "iata": request.data['destinationplace'].removesuffix('-sky')
                                 },
                                 "date": {
-                                    "year": 2022,
-                                    "month": 12,
+                                    "year": 2023,
+                                    "month": 1,
                                     "day": 14
                                 }
                             }
