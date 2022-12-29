@@ -209,7 +209,7 @@ class LiveFlightsData:
     def __init__(self, flightsData):
         self.flightsData = flightsData
 
-    def processTravelDate(self, travel_date):
+    def processTravelDateold(self, travel_date):
         print(travel_date)
         travel_date = datetime.datetime.strptime(travel_date, "%Y-%m-%dT%H:%M:%S")
         date_str = travel_date.date()
@@ -219,6 +219,24 @@ class LiveFlightsData:
             'date': date_str,
             'time': time_str
         }
+
+    def processTravelDate(self, departure_time_dict):
+
+        # Create a datetime object from the 'departureDateTime' dictionary
+        dt = datetime.datetime(departure_time_dict['year'], departure_time_dict['month'], departure_time_dict['day'], departure_time_dict['hour'], departure_time_dict['minute'], departure_time_dict['second'])
+
+        # Format the datetime object as a string in the desired format
+        departure_time_string = dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+        # Split the date and time into separate variables
+        date_str = dt.date()
+        time_str = dt.time().strftime("%I:%M %p")
+
+        return {
+            'date': date_str,
+            'time': time_str
+        }
+
 
     def getLegDetails(self, id):
         # details.update(self.getLegDetails(flightDataItinerariesList[0][0])) #LEGS
@@ -249,15 +267,15 @@ class LiveFlightsData:
             print(value[0])
             origin_station = self.getPlaces(value[1]['originPlaceId'])
             destination_station = self.getPlaces(value[1]['destinationPlaceId'])
-            departure = self.processTravelDate(value[1]['departureDateTime']['year'])
-            arrival = self.processTravelDate((value[1]['arrivalDateTime']['year']))
+            departure = self.processTravelDate(value[1]['departureDateTime'])
+            arrival = self.processTravelDate((value[1]['arrivalDateTime']))
 #                 TODO FIX SO IT HAS THE ENTIRE DATE
-            total_duration = value['durationInMinutes']
+            total_duration = value[1]['durationInMinutes']
             days = int(total_duration / 1440)  # 1440 -> total minutes in a day
             left_minutes = total_duration % 1440
             hours = int(left_minutes / 60)
             minutes = total_duration - (days * 1440) - (hours * 60)
-            number_of_stops = len(value[1]['stopCount'])
+            number_of_stops = value[1]['stopCount']
             carriers = self.getCarrier(value[1]['operatingCarrierIds'][0])
 
             return {
@@ -274,7 +292,9 @@ class LiveFlightsData:
                 'carriers': carriers
             }
 
-    def getAgent(self, id):
+    def getAgentOLD(self, id):
+        print("belowowowow")
+        print(list(self.flightsData['content']['results']['agents'].items()))
         for agent in self.flightsData['Agents']:
             if agent['Id'] == id:
                 return {
@@ -282,17 +302,24 @@ class LiveFlightsData:
                     'image': agent['ImageUrl']
                 }
 
+    def getAgent(self, id):
+        for agent in self.flightsData:
+            if agent[0] == id:
+                return {
+                    'name': agent[1]['name'],
+                    'image': agent[1]['imageUrl']
+                }
+
     def getPlaces(self, id):
         # print(list(self.flightsData['content']['results']['places'].items()))
         for place in list(self.flightsData['content']['results']['places'].items()):
-            print(place)
             if place[1]['entityId'] == id:
                 return place[1]['name']
 
     def getCarrier(self, id):
-        for carrier in self.flightsData['Carriers']:
-            if carrier['Id'] == id:
-                return carrier['Name']
+        for carrier in list(self.flightsData['content']['results']['carriers'].items()):
+            if carrier[0] == id:
+                return carrier[1]['name']
 
     def processFlights(self):
         finalList = {}
@@ -483,6 +510,9 @@ class FlightLivePrices(APIView):
                     response_data = result.json()
                     self.sessionToken = response_data['sessionToken']
                     results = self.getPollResults()
+                    print("below is results")
+                    with open('C:\games\sample.txt', 'w') as file:
+                        file.write(json.dumps(results)) # use `json.loads` to do the reverse
                     return Response({
                         'message': 'Found {} results'.format(len(results['content']['results']['legs'])),
                         'list': results['content']['results']['legs'],
