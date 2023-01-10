@@ -210,7 +210,6 @@ class LiveFlightsData:
         self.flightsData = flightsData
 
     def processTravelDateold(self, travel_date):
-        print(travel_date)
         travel_date = datetime.datetime.strptime(travel_date, "%Y-%m-%dT%H:%M:%S")
         date_str = travel_date.date()
         travel_time = travel_date.time()
@@ -263,8 +262,6 @@ class LiveFlightsData:
         for value in flightDataItinerariesList:
            # print(value['legIds'][0])
          if value[0] == id:
-            print("in if")
-            print(value[0])
             origin_station = self.getPlaces(value[1]['originPlaceId'])
             destination_station = self.getPlaces(value[1]['destinationPlaceId'])
             departure = self.processTravelDate(value[1]['departureDateTime'])
@@ -293,8 +290,6 @@ class LiveFlightsData:
             }
 
     def getAgentOLD(self, id):
-        print("belowowowow")
-        print(list(self.flightsData['content']['results']['agents'].items()))
         for agent in self.flightsData['Agents']:
             if agent['Id'] == id:
                 return {
@@ -303,7 +298,7 @@ class LiveFlightsData:
                 }
 
     def getAgent(self, id):
-        for agent in self.flightsData:
+        for agent in list(self.flightsData['content']['results']['agents'].items()):
             if agent[0] == id:
                 return {
                     'name': agent[1]['name'],
@@ -448,6 +443,8 @@ class FlightLivePrices(APIView):
             serializer = serializers.FlightsLiveModelFormSerializer(data=request.data)
             if serializer.is_valid():
                 print("SERIALIZER is valid")
+                date_obj_outbounddate = datetime.datetime.strptime(request.data['outbounddate'], '%Y-%m-%d')
+                date_obj_inbounddate = datetime.datetime.strptime(request.data['inbounddate'], '%Y-%m-%d')
                 if "inbounddate" in request.data:
                     print("WE ARE IN THE INBOUND DATE")
                     liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
@@ -466,11 +463,25 @@ class FlightLivePrices(APIView):
                                     "iata": request.data['destinationplace'].removesuffix('-sky')
                                 },
                                 "date": {
-                                    "year": 2023,
-                                    "month": 1,
-                                    "day": 14
+                                    "year": date_obj_outbounddate.year,
+                                    "month": date_obj_outbounddate.month,
+                                    "day": date_obj_outbounddate.day
+                                }
+                            },
+                            {
+                                "originPlaceId": {
+                                    "iata": request.data['destinationplace'].removesuffix('-sky')
+                                },
+                                "destinationPlaceId": {
+                                    "iata": request.data['originplace'].removesuffix('-sky')
+                                },
+                                "date": {
+                                    "year": date_obj_inbounddate.year,
+                                    "month": date_obj_inbounddate.month,
+                                    "day": date_obj_inbounddate.day
                                 }
                             }
+
                          ],
                         "childrenAges": [],
                         "cabinClass": "CABIN_CLASS_ECONOMY",
@@ -510,12 +521,19 @@ class FlightLivePrices(APIView):
                     response_data = result.json()
                     self.sessionToken = response_data['sessionToken']
                     results = self.getPollResults()
-                    print("below is results")
-                    with open('C:\games\sample.txt', 'w') as file:
-                        file.write(json.dumps(results)) # use `json.loads` to do the reverse
+                    original_stdout = sys.stdout
+
+                    with open('C:/filewrite/flights.txt', 'w') as f:
+                        sys.stdout = f
+                        print('Hello, Python!')
+                        print(json.dumps(results, indent=4, sort_keys=True, default=str))
+                        # Reset the standard output
+                        sys.stdout = original_stdout
+
                     return Response({
-                        'message': 'Found {} results'.format(len(results['content']['results']['legs'])),
-                        'list': results['content']['results']['legs'],
+                        'message': 'Found {} results'.format(len(results['list'] )),
+                        'list': results['list'],
+                        # 'message': 'Found {} results'.format(len(results['content']['results']['legs'])),
                     }, status=status.HTTP_200_OK)
                 else:
                     return Response({'message': 'Search query is invalid'},
