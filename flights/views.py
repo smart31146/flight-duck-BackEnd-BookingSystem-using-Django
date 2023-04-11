@@ -546,22 +546,57 @@ class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
 
     def hitFlightUrl(self, data, tripDays):
-        date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        numberOfMonthsToTry = date.month + data['number_of_extended_months']
-        numberOfDaysInMonth = monthrange(date.year, date.month)
-        date2 = '{:%Y-%m}'.format(datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d'))
-        country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
         finalFlightsList = []
-        flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-            FLIGHTS_API_URL, data['country'], data['currency_format'],
-            data['originplace'], data['destinationplace'],
-            date2, date2)
-        try:
-            result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
-            result.raise_for_status()
-            jsonResult = json.loads(result.text)
 
-            # for loop that goes through each quote and adds to the array below and makes sure
+        outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
+        current_year = outbound_date.year
+        current_month = outbound_date.month
+
+        flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
+
+        payload = {
+            "query": {
+                "currency": data['currency_format'],
+                "locale": "en-US",
+                "market": data['country'],
+                "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
+                "queryLegs": [
+                    {
+                        "originPlace": {
+                            "queryPlace": {
+                                "iata": data['originplace'].removesuffix('-sky')
+                            }
+                        },
+                        "destinationPlace": {
+                            "queryPlace": {
+                                "iata": data['destinationplace'].removesuffix('-sky')
+                            }
+                        },
+                        "date_range": {
+                            "startDate": {
+                                "year": current_year,
+                                "month": current_month
+                            },
+                            "endDate": {
+                                "year": current_year,
+                                "month": current_month
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+
+        print(payload)
+
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
+        print(headers)
+
+        try:
+            result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
+            result.raise_for_status()
+            jsonResult = result.json()
 
             if jsonResult.get('Quotes', None):
                 for quotes in jsonResult['Quotes']:
@@ -571,7 +606,6 @@ class CacheFlightHotelsPackage(APIView):
                                                              '%Y-%m-%d').date()
 
                     daysBetween = inboundDate - outboundDate
-                    # print(quotes['MinPrice'])
                     if len(jsonResult['Quotes']) > 0:
                         if daysBetween.days == tripDays:
                             print(outboundDate, " TO ", inboundDate)
@@ -583,16 +617,15 @@ class CacheFlightHotelsPackage(APIView):
                                 'country': model_to_dict(country_name)['country_name'],
                             })
         except requests.exceptions.HTTPError as e:
-            # print("flight requests exception========", e)
-            # print("for date====", departureDate)
-            # print()
             finalFlightsList.append({
                 'outbounddate': '01/08/2022',
                 'inbounddate': '04/08/2022',
                 'carrier_name': '',
                 'price': 0
             })
+
         return finalFlightsList
+
 
     def getLiveFlightsWhenNoResultsForCache(self, data):
         date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
@@ -600,51 +633,81 @@ class CacheFlightHotelsPackage(APIView):
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(data['trip_days'])
         finalFlightsList = []
-        for currentMonth in range(date.month, numberOfMonthsToTry+1):
-            if currentMonth<10:
-                currentMonth = "0"+str(currentMonth)
+        outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
+        current_year = outbound_date.year
+        current_month = outbound_date.month
+
+        flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
+        for currentMonth in range(date.month, numberOfMonthsToTry + 1):
+            if currentMonth < 10:
+                currentMonth = "0" + str(currentMonth)
             start_day = 1
             if date.month == int(currentMonth):
                 start_day = date.day
-            for day in range(start_day, numberOfDaysInMonth[1]+1):
-                departureDate : str
-                returnDate : str
+            for day in range(start_day, numberOfDaysInMonth[1] + 1):
+                departureDate: str
+                returnDate: str
                 currentMonthWasIncreased = False
                 day = int(day)
-                returnDay = int(day+tripDays)
+                returnDay = int(day + tripDays)
                 currentMonth = int(currentMonth)
-                if day<10:
-                    day = "0"+str(day)
-                if int(currentMonth)<10:
-                    currentMonth = "0"+str(currentMonth)
+                if day < 10:
+                    day = "0" + str(day)
+                if int(currentMonth) < 10:
+                    currentMonth = "0" + str(currentMonth)
                 departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
-                if returnDay>numberOfDaysInMonth[1]:
-                    returnDay = returnDay-numberOfDaysInMonth[1]
-                    currentMonth = int(currentMonth)+1
+                if returnDay > numberOfDaysInMonth[1]:
+                    returnDay = returnDay - numberOfDaysInMonth[1]
+                    currentMonth = int(currentMonth) + 1
                     currentMonthWasIncreased = True
-                    if currentMonth<10:
-                        currentMonth = "0"+str(currentMonth)
-                if returnDay<10:
-                    returnDay = "0"+str(returnDay)
+                    if currentMonth < 10:
+                        currentMonth = "0" + str(currentMonth)
+                if returnDay < 10:
+                    returnDay = "0" + str(returnDay)
                 returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
 
-                country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
-
-                flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-                    FLIGHTS_API_URL, data['country'], data['currency_format'],
-                    data['originplace'], data['destinationplace'],
-                    departureDate, returnDate)
-
-                print(flightsBrowseRoutesURL)
+                payload = {
+                    "query": {
+                        "currency": data['currency_format'],
+                        "locale": "en-US",
+                        "market": data['country'],
+                        "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
+                        "queryLegs": [
+                            {
+                                "originPlace": {
+                                    "queryPlace": {
+                                        "iata": data['originplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "destinationPlace": {
+                                    "queryPlace": {
+                                        "iata": data['destinationplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "date_range": {
+                                    "startDate": {
+                                        "year": current_year,
+                                        "month": current_month
+                                    },
+                                    "endDate": {
+                                        "year": current_year,
+                                        "month": current_month
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
 
                 try:
-                    result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+                    result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
                     result.raise_for_status()
-                    jsonResult = json.loads(result.text)
-                    print(jsonResult)
+                    jsonResult = result.json()
 
                     if jsonResult.get('Quotes', None):
-                        if len(jsonResult['Quotes'])>0:
+                        if len(jsonResult['Quotes']) > 0:
                             finalFlightsList.append({
                                 'outbounddate': departureDate,
                                 'inbounddate': returnDate,
@@ -663,7 +726,7 @@ class CacheFlightHotelsPackage(APIView):
                         'price': 0
                     })
                 if currentMonthWasIncreased == True:
-                    currentMonth = int(currentMonth)-1
+                    currentMonth = int(currentMonth) - 1
                     print("THIS IS FLIGHTS", finalFlightsList)
         return finalFlightsList
 
