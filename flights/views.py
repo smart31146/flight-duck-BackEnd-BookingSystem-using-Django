@@ -549,8 +549,8 @@ class CacheFlightHotelsPackage(APIView):
         finalFlightsList = []
 
         outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        current_year = outbound_date.year
-        current_month = outbound_date.month
+        selected_year = outbound_date.year
+        selected_month = outbound_date.month
 
         flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
 
@@ -574,12 +574,34 @@ class CacheFlightHotelsPackage(APIView):
                         },
                         "date_range": {
                             "startDate": {
-                                "year": current_year,
-                                "month": current_month
+                                "year": selected_year,
+                                "month": selected_month
                             },
                             "endDate": {
-                                "year": current_year,
-                                "month": current_month
+                                "year": selected_year,
+                                "month": selected_month
+                            }
+                        }
+                    },
+                    {
+                        "originPlace": {
+                            "queryPlace": {
+                                "iata": data['destinationplace'].removesuffix('-sky')
+                            }
+                        },
+                        "destinationPlace": {
+                            "queryPlace": {
+                                "iata": data['originplace'].removesuffix('-sky')
+                            }
+                        },
+                        "date_range": {
+                            "startDate": {
+                                "year": selected_year,
+                                "month": selected_month
+                            },
+                            "endDate": {
+                                "year": selected_year,
+                                "month": selected_month
                             }
                         }
                     }
@@ -593,29 +615,33 @@ class CacheFlightHotelsPackage(APIView):
 
         print(headers)
 
+
         try:
             result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
             result.raise_for_status()
             jsonResult = result.json()
 
-            if jsonResult.get('Quotes', None):
-                for quotes in jsonResult['Quotes']:
-                    outboundDate = datetime.datetime.strptime(quotes['OutboundLeg']['DepartureDate'].split("T")[0],
-                                                              '%Y-%m-%d').date()
-                    inboundDate = datetime.datetime.strptime(quotes['InboundLeg']['DepartureDate'].split("T")[0],
-                                                             '%Y-%m-%d').date()
+            quotes = jsonResult.get('content', {}).get('results', {}).get('quotes', {})
+            if quotes:
+                for quote_key, quote_data in quotes.items():
+                    outbound_date = datetime.date(quote_data['outboundLeg']['departureDateTime']['year'],
+                                                  quote_data['outboundLeg']['departureDateTime']['month'],
+                                                  quote_data['outboundLeg']['departureDateTime']['day'])
 
-                    daysBetween = inboundDate - outboundDate
-                    if len(jsonResult['Quotes']) > 0:
-                        if daysBetween.days == tripDays:
-                            print(outboundDate, " TO ", inboundDate)
-                            finalFlightsList.append({
-                                'outbounddate': quotes['OutboundLeg']['DepartureDate'].split("T")[0],
-                                'inbounddate': quotes['InboundLeg']['DepartureDate'].split("T")[0],
-                                'carrier_name': jsonResult['Carriers'][0]['Name'],
-                                'price': quotes['MinPrice'],
-                                'country': model_to_dict(country_name)['country_name'],
-                            })
+                    inbound_date = datetime.date(quote_data['inboundLeg']['departureDateTime']['year'],
+                                                 quote_data['inboundLeg']['departureDateTime']['month'],
+                                                 quote_data['inboundLeg']['departureDateTime']['day'])
+
+                    days_between = inbound_date - outbound_date
+                    if days_between.days == tripDays:
+                        print(outbound_date, " TO ", inbound_date)
+                        finalFlightsList.append({
+                            'outbounddate': outbound_date.strftime('%Y-%m-%d'),
+                            'inbounddate': inbound_date.strftime('%Y-%m-%d'),
+                            'carrier_name': jsonResult['Carriers'][0]['Name'],
+                            'price': float(quote_data['minPrice']['amount']),
+                            'country': model_to_dict(country_name)['country_name'],
+                        })
         except requests.exceptions.HTTPError as e:
             finalFlightsList.append({
                 'outbounddate': '01/08/2022',
@@ -627,6 +653,7 @@ class CacheFlightHotelsPackage(APIView):
         return finalFlightsList
 
 
+
     def getLiveFlightsWhenNoResultsForCache(self, data):
         date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
         numberOfMonthsToTry = date.month + data['number_of_extended_months']
@@ -634,7 +661,7 @@ class CacheFlightHotelsPackage(APIView):
         tripDays = int(data['trip_days'])
         finalFlightsList = []
         outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        current_year = outbound_date.year
+        selected_year = outbound_date.year
         current_month = outbound_date.month
 
         flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
@@ -688,11 +715,33 @@ class CacheFlightHotelsPackage(APIView):
                                 },
                                 "date_range": {
                                     "startDate": {
-                                        "year": current_year,
+                                        "year": selected_year,
                                         "month": current_month
                                     },
                                     "endDate": {
-                                        "year": current_year,
+                                        "year": selected_year,
+                                        "month": current_month
+                                    }
+                                }
+                            },
+                            {
+                                "originPlace": {
+                                    "queryPlace": {
+                                        "iata": data['destinationplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "destinationPlace": {
+                                    "queryPlace": {
+                                        "iata": data['originplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "date_range": {
+                                    "startDate": {
+                                        "year": selected_year,
+                                        "month": current_month
+                                    },
+                                    "endDate": {
+                                        "year": selected_year,
                                         "month": current_month
                                     }
                                 }
