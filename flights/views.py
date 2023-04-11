@@ -22,11 +22,13 @@ from django.db.models import Q
 from hotels import views as hotels_view
 from hotels.views import getHotelDetailsBasedOnCode
 import traceback
+import sys
 from .services import package_service
 from backend import settings
 import numpy as np
 import pandas as pd
 import codecs
+from pprint import pprint
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -207,7 +209,7 @@ class LiveFlightsData:
     def __init__(self, flightsData):
         self.flightsData = flightsData
 
-    def processTravelDate(self, travel_date):
+    def processTravelDateold(self, travel_date):
         travel_date = datetime.datetime.strptime(travel_date, "%Y-%m-%dT%H:%M:%S")
         date_str = travel_date.date()
         travel_time = travel_date.time()
@@ -217,36 +219,77 @@ class LiveFlightsData:
             'time': time_str
         }
 
+    def processTravelDate(self, departure_time_dict):
+
+        # Create a datetime object from the 'departureDateTime' dictionary
+        dt = datetime.datetime(departure_time_dict['year'], departure_time_dict['month'], departure_time_dict['day'], departure_time_dict['hour'], departure_time_dict['minute'], departure_time_dict['second'])
+
+        # Format the datetime object as a string in the desired format
+        departure_time_string = dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+        # Split the date and time into separate variables
+        date_str = dt.date()
+        time_str = dt.time().strftime("%I:%M %p")
+
+        return {
+            'date': date_str,
+            'time': time_str
+        }
+
+
     def getLegDetails(self, id):
-        for leg in self.flightsData['Legs']:
-            if leg['Id'] == id:
-                origin_station = self.getPlaces(leg['OriginStation'])
-                destination_station = self.getPlaces(leg['DestinationStation'])
-                departure = self.processTravelDate(leg['Departure'])
-                arrival = self.processTravelDate(leg['Arrival'])
-                total_duration = leg['Duration']
-                days = int(total_duration / 1440)  # 1440 -> total minutes in a day
-                left_minutes = total_duration % 1440
-                hours = int(left_minutes / 60)
-                minutes = total_duration - (days * 1440) - (hours * 60)
-                number_of_stops = len(leg['Stops'])
-                carriers = self.getCarrier(leg['Carriers'][0])
+        # details.update(self.getLegDetails(flightDataItinerariesList[0][0])) #LEGS
+        flightDataItinerariesList = list(self.flightsData['content']['results']['legs'].items())
+        # print(flightDataItinerariesList)
 
-                return {
-                    'origin_station': origin_station,
-                    'destination_station': destination_station,
-                    'departure': departure,
-                    'arrival': arrival,
-                    'total_duration': {
-                        'days': days,
-                        'hours': hours,
-                        'minutes': minutes
-                    },
-                    'number_of_stops': number_of_stops,
-                    'carriers': carriers
-                }
+        # with open('C:\games\sample.txt', 'w') as f:
+        #     print(flightDataItinerariesList, file=f)
+        # print(flightDataItinerariesList)
 
-    def getAgent(self, id):
+
+        # for value in flightDataItinerariesList:
+            # print(value[0])
+            # print(value[1]['destinationPlaceId'])
+
+            # with open('C:\games\sample.txt', 'w') as f:
+            #     print(value, file=f)
+
+              # borigin_station = self.getPlaces(value['legIds']['originPlaceId'])
+              # destination_station = self.getPlaces(value['destinationPlaceId'])
+              # departure = self.processTravelDate(value['departureDateTime']['year'])
+              # arrival = self.processTravelDate(value['arrivalDateTime']['year'])
+
+        for value in flightDataItinerariesList:
+           # print(value['legIds'][0])
+         if value[0] == id:
+            origin_station = self.getPlaces(value[1]['originPlaceId'])
+            destination_station = self.getPlaces(value[1]['destinationPlaceId'])
+            departure = self.processTravelDate(value[1]['departureDateTime'])
+            arrival = self.processTravelDate((value[1]['arrivalDateTime']))
+#                 TODO FIX SO IT HAS THE ENTIRE DATE
+            total_duration = value[1]['durationInMinutes']
+            days = int(total_duration / 1440)  # 1440 -> total minutes in a day
+            left_minutes = total_duration % 1440
+            hours = int(left_minutes / 60)
+            minutes = total_duration - (days * 1440) - (hours * 60)
+            number_of_stops = value[1]['stopCount']
+            carriers = self.getCarrier(value[1]['operatingCarrierIds'][0])
+
+            return {
+                'origin_station': origin_station,
+                'destination_station': destination_station,
+                'departure': departure,
+                'arrival': arrival,
+                'total_duration': {
+                    'days': days,
+                    'hours': hours,
+                    'minutes': minutes
+                },
+                'number_of_stops': number_of_stops,
+                'carriers': carriers
+            }
+
+    def getAgentOLD(self, id):
         for agent in self.flightsData['Agents']:
             if agent['Id'] == id:
                 return {
@@ -254,35 +297,113 @@ class LiveFlightsData:
                     'image': agent['ImageUrl']
                 }
 
+    def getAgent(self, id):
+        for agent in list(self.flightsData['content']['results']['agents'].items()):
+            if agent[0] == id:
+                return {
+                    'name': agent[1]['name'],
+                    'image': agent[1]['imageUrl']
+                }
+
     def getPlaces(self, id):
-        for place in self.flightsData['Places']:
-            if place['Id'] == id:
-                return place['Name']
+        # print(list(self.flightsData['content']['results']['places'].items()))
+        for place in list(self.flightsData['content']['results']['places'].items()):
+            if place[1]['entityId'] == id:
+                return place[1]['name']
 
     def getCarrier(self, id):
-        for carrier in self.flightsData['Carriers']:
-            if carrier['Id'] == id:
-                return carrier['Name']
+        for carrier in list(self.flightsData['content']['results']['carriers'].items()):
+            if carrier[0] == id:
+                return carrier[1]['name']
 
     def processFlights(self):
         finalList = {}
         processedData = []
+        print("processFlightsprocessFlightsprocessFlightsprocessFlightsprocessFlights")
+        # print(self.flightsData)
 
-        for flight in self.flightsData['Itineraries']:
+        # flightDataItinerariesList = list(self.flightsData.items())
+        flightDataItinerariesList = list(self.flightsData['content']['results']['itineraries'].items())
+
+        # print(type(flightDataItinerariesList[3][0][0][0]))
+        # print(flightDataItinerariesList[3][0][0][0])
+
+
+        # aList = list(flightDataItinerariesList[0])
+        #
+        # aList2 = list(aList[1])
+        #
+        # aList3 = list(aList2[0])
+        #
+        # print(aList3)
+        # print(type(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId']))
+        # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId'])
+
+    # details.update(self.getLegDetails(flightDataItinerariesList[0][0])) #LEGS
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['legIds'][0])
+    
+    
+    # details['price'] = flight['PricingOptions'][0]['Price'] #PRICE
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['price']['amount'])
+        
+    # details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl'] #DEEPLINK
+    # print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['deepLink'])
+
+    # details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0]) #AGENT
+    #   print(self.flightsData['content']['results']['itineraries']['13981-2212140600--31694-0-16692-2212140725']['pricingOptions'][0]['items'][0]['agentId'])
+
+        # we need price and leg ids and to loop over each key and get both
+
+        # res = next(iter(flightDataItinerariesList))
+
+        # print(res)
+
+        # we need to iterate through each key and update the methods to how we access them as above and hopefully after we are sweet
+
+        # print("check below")
+        #
+        # for key, value in flightDataItinerariesList:
+        #     print(value['pricingOptions'][0]['items'][0]['agentId'])
+        # quit()
+        # print(self.flightsData)
+
+        # for key, value in flightDataItinerariesList:
+        #     print(value['legIds'][0])
+
+
+        for key, value in flightDataItinerariesList:
             details = {}
-            details.update(self.getLegDetails(flight['OutboundLegId']))
-            details['price'] = flight['PricingOptions'][0]['Price']
-            details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl']
-            details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0])
+            details.update(self.getLegDetails(value['legIds'][0]))
+            details['price'] = value['pricingOptions'][0]['price']['amount']
+            details['booking_deep_link'] = value['pricingOptions'][0]['items'][0]['deepLink']
+            details['agent'] = self.getAgent(value['pricingOptions'][0]['items'][0]['agentId'])
             processedData.append(details)
         processedData.sort(key=lambda x: x['price'], reverse=False)
         # print("number of flights==========", len(processedData))
         # print("processed final list==========", processedData)
         processedData[0]['cheapest'] = True
 
-        finalList['currency'] = self.flightsData['Currencies'][0]['Symbol']
         finalList['list'] = processedData
         return finalList
+
+
+        # for flight in self.flightsData['content']['results']['itineraries']:
+        #     details = {}
+        #     print("below is flight leg ids")
+        #     print(flight[2])
+        #     details.update(self.getLegDetails(flightDataItinerariesList[0][0]))
+        #     details['price'] = flight['PricingOptions'][0]['Price']
+        #     details['booking_deep_link'] = flight['PricingOptions'][0]['DeeplinkUrl']
+        #     details['agent'] = self.getAgent(flight['PricingOptions'][0]['Agents'][0])
+        #     processedData.append(details)
+        # processedData.sort(key=lambda x: x['price'], reverse=False)
+        # # print("number of flights==========", len(processedData))
+        # # print("processed final list==========", processedData)
+        # processedData[0]['cheapest'] = True
+        #
+        # finalList['currency'] = self.flightsData['Currencies'][0]['Symbol']
+        # finalList['list'] = processedData
+        # return finalList
 
 
 class FlightLivePrices(APIView):
@@ -290,9 +411,11 @@ class FlightLivePrices(APIView):
     print("WE ARE IN THE FLIGHT LIVE PRICES")
 
     def getPollResults(self):
-        pollResultsURL = FLIGHTS_API_URL + 'pricing/v1.0/' + self.sessionToken + "?apikey=" + FLIGHTS_API_KEY
-        result = requests.get(
-            pollResultsURL
+        pollResultsURL = FLIGHTS_API_URL + 'v3/flights/live/search/poll/' + self.sessionToken
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+        print(headers)
+        result = requests.post(
+            pollResultsURL, headers=headers,
         )
 
         if (result.status_code == 200):
@@ -315,56 +438,102 @@ class FlightLivePrices(APIView):
                 user.save()
             ## flights serializer
             print("WE ARE IN THE SERIALIZER")
+            headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
             serializer = serializers.FlightsLiveModelFormSerializer(data=request.data)
             if serializer.is_valid():
                 print("SERIALIZER is valid")
+                date_obj_outbounddate = datetime.datetime.strptime(request.data['outbounddate'], '%Y-%m-%d')
+                date_obj_inbounddate = datetime.datetime.strptime(request.data['inbounddate'], '%Y-%m-%d')
                 if "inbounddate" in request.data:
                     print("WE ARE IN THE INBOUND DATE")
-                    liveFlightsPricingURL = FLIGHTS_API_URL + 'pricing/v1.0'
+                    liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
                     data = {
-                        'country': request.data['country'],
+                    "query": {
+                        'market': request.data['country'],
                         'currency': request.data['currency'],
                         'locale': request.data['locale'],
-                        'locationSchema': 'iata',
-                        'originplace': request.data['originplace'],
-                        'destinationplace': request.data['destinationplace'],
-                        'outbounddate': request.data['outbounddate'],
-                        'inbounddate': request.data['inbounddate'],
                         'adults': request.data['adults'],
-                        'apikey': FLIGHTS_API_KEY
+                        "queryLegs": [
+                            {
+                                "originPlaceId": {
+                                    "iata": request.data['originplace'].removesuffix('-sky')
+                                },
+                                "destinationPlaceId": {
+                                    "iata": request.data['destinationplace'].removesuffix('-sky')
+                                },
+                                "date": {
+                                    "year": date_obj_outbounddate.year,
+                                    "month": date_obj_outbounddate.month,
+                                    "day": date_obj_outbounddate.day
+                                }
+                            },
+                            {
+                                "originPlaceId": {
+                                    "iata": request.data['destinationplace'].removesuffix('-sky')
+                                },
+                                "destinationPlaceId": {
+                                    "iata": request.data['originplace'].removesuffix('-sky')
+                                },
+                                "date": {
+                                    "year": date_obj_inbounddate.year,
+                                    "month": date_obj_inbounddate.month,
+                                    "day": date_obj_inbounddate.day
+                                }
+                            }
+
+                         ],
+                        "childrenAges": [],
+                        "cabinClass": "CABIN_CLASS_ECONOMY",
+                        "excludedAgentsIds": [],
+                        "excludedCarriersIds": [],
+                        "includedAgentsIds": [],
+                        "includedCarriersIds": []
                     }
-                else:
-                    liveFlightsPricingURL = FLIGHTS_API_URL + 'pricing/v1.0'
-                    data = {
-                        'country': request.data['country'],
-                        'currency': request.data['currency'],
-                        'locale': request.data['locale'],
-                        'locationSchema': 'iata',
-                        'originplace': request.data['originplace'],
-                        'destinationplace': request.data['destinationplace'],
-                        'outbounddate': request.data['outbounddate'],
-                        'adults': request.data['adults'],
-                        'apikey': FLIGHTS_API_KEY
-                    }
+                  }
+#                 else:
+#                     liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
+#                     data = {
+#                         'country': request.data['country'],
+#                         'currency': request.data['currency'],
+#                         'locale': request.data['locale'],
+#                         'locationSchema': 'iata',
+#                         'originplace': request.data['originplace'],
+#                         'destinationplace': request.data['destinationplace'],
+#                         'outbounddate': request.data['outbounddate'],
+#                         'adults': request.data['adults'],
+#                         'apikey': FLIGHTS_API_KEY
+#                     }
                 print("THIS IS DATA")
                 print(data)
                 print("THIS IS URL")
                 print(liveFlightsPricingURL)
                 result = requests.post(
                     liveFlightsPricingURL,
-                    data=data
+                    data=json.dumps(data),
+                    headers=headers,
                 )
                 print("below is status code")
                 print(result.status_code)
 
-                if (result.status_code == 201):
+                if (result.status_code == 200):
                     print("SUCCESS")
-                    self.sessionToken = result.headers.get('Location').split('/')[-1]
+                    response_data = result.json()
+                    self.sessionToken = response_data['sessionToken']
                     results = self.getPollResults()
+                    original_stdout = sys.stdout
+
+                    with open('C:/filewrite/flights.txt', 'w') as f:
+                        sys.stdout = f
+                        print('Hello, Python!')
+                        print(json.dumps(results, indent=4, sort_keys=True, default=str))
+                        # Reset the standard output
+                        sys.stdout = original_stdout
+
                     return Response({
-                        'message': 'Found {} results'.format(len(results['list'])),
+                        'message': 'Found {} results'.format(len(results['list'] )),
                         'list': results['list'],
-                        'currency': results['currency']
+                        # 'message': 'Found {} results'.format(len(results['content']['results']['legs'])),
                     }, status=status.HTTP_200_OK)
                 else:
                     return Response({'message': 'Search query is invalid'},
@@ -377,53 +546,114 @@ class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
 
     def hitFlightUrl(self, data, tripDays):
-        date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        numberOfMonthsToTry = date.month + data['number_of_extended_months']
-        numberOfDaysInMonth = monthrange(date.year, date.month)
-        date2 = '{:%Y-%m}'.format(datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d'))
         country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
         finalFlightsList = []
-        flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-            FLIGHTS_API_URL, data['country'], data['currency_format'],
-            data['originplace'], data['destinationplace'],
-            date2, date2)
+
+        outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
+        selected_year = outbound_date.year
+        selected_month = outbound_date.month
+
+        flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
+
+        payload = {
+            "query": {
+                "currency": data['currency_format'],
+                "locale": "en-US",
+                "market": data['country'],
+                "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
+                "queryLegs": [
+                    {
+                        "originPlace": {
+                            "queryPlace": {
+                                "iata": data['originplace'].removesuffix('-sky')
+                            }
+                        },
+                        "destinationPlace": {
+                            "queryPlace": {
+                                "iata": data['destinationplace'].removesuffix('-sky')
+                            }
+                        },
+                        "date_range": {
+                            "startDate": {
+                                "year": selected_year,
+                                "month": selected_month
+                            },
+                            "endDate": {
+                                "year": selected_year,
+                                "month": selected_month
+                            }
+                        }
+                    },
+                    {
+                        "originPlace": {
+                            "queryPlace": {
+                                "iata": data['destinationplace'].removesuffix('-sky')
+                            }
+                        },
+                        "destinationPlace": {
+                            "queryPlace": {
+                                "iata": data['originplace'].removesuffix('-sky')
+                            }
+                        },
+                        "date_range": {
+                            "startDate": {
+                                "year": selected_year,
+                                "month": selected_month
+                            },
+                            "endDate": {
+                                "year": selected_year,
+                                "month": selected_month
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+
+        print(payload)
+
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
+        print(headers)
+
+
         try:
-            result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+            result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
             result.raise_for_status()
-            jsonResult = json.loads(result.text)
+            jsonResult = result.json()
 
-            # for loop that goes through each quote and adds to the array below and makes sure
+            quotes = jsonResult.get('content', {}).get('results', {}).get('quotes', {})
+            if quotes:
+                for quote_key, quote_data in quotes.items():
+                    outbound_date = datetime.date(quote_data['outboundLeg']['departureDateTime']['year'],
+                                                  quote_data['outboundLeg']['departureDateTime']['month'],
+                                                  quote_data['outboundLeg']['departureDateTime']['day'])
 
-            if jsonResult.get('Quotes', None):
-                for quotes in jsonResult['Quotes']:
-                    outboundDate = datetime.datetime.strptime(quotes['OutboundLeg']['DepartureDate'].split("T")[0],
-                                                              '%Y-%m-%d').date()
-                    inboundDate = datetime.datetime.strptime(quotes['InboundLeg']['DepartureDate'].split("T")[0],
-                                                             '%Y-%m-%d').date()
+                    inbound_date = datetime.date(quote_data['inboundLeg']['departureDateTime']['year'],
+                                                 quote_data['inboundLeg']['departureDateTime']['month'],
+                                                 quote_data['inboundLeg']['departureDateTime']['day'])
 
-                    daysBetween = inboundDate - outboundDate
-                    # print(quotes['MinPrice'])
-                    if len(jsonResult['Quotes']) > 0:
-                        if daysBetween.days == tripDays:
-                            print(outboundDate, " TO ", inboundDate)
-                            finalFlightsList.append({
-                                'outbounddate': quotes['OutboundLeg']['DepartureDate'].split("T")[0],
-                                'inbounddate': quotes['InboundLeg']['DepartureDate'].split("T")[0],
-                                'carrier_name': jsonResult['Carriers'][0]['Name'],
-                                'price': quotes['MinPrice'],
-                                'country': model_to_dict(country_name)['country_name'],
-                            })
+                    days_between = inbound_date - outbound_date
+                    if days_between.days == tripDays:
+                        print(outbound_date, " TO ", inbound_date)
+                        finalFlightsList.append({
+                            'outbounddate': outbound_date.strftime('%Y-%m-%d'),
+                            'inbounddate': inbound_date.strftime('%Y-%m-%d'),
+                            'carrier_name': "",
+                            'price': float(quote_data['minPrice']['amount']),
+                            'country': model_to_dict(country_name)['country_name'],
+                        })
         except requests.exceptions.HTTPError as e:
-            # print("flight requests exception========", e)
-            # print("for date====", departureDate)
-            # print()
             finalFlightsList.append({
                 'outbounddate': '01/08/2022',
                 'inbounddate': '04/08/2022',
                 'carrier_name': '',
                 'price': 0
             })
+
         return finalFlightsList
+
+
 
     def getLiveFlightsWhenNoResultsForCache(self, data):
         date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
@@ -431,51 +661,103 @@ class CacheFlightHotelsPackage(APIView):
         numberOfDaysInMonth = monthrange(date.year, date.month)
         tripDays = int(data['trip_days'])
         finalFlightsList = []
-        for currentMonth in range(date.month, numberOfMonthsToTry+1):
-            if currentMonth<10:
-                currentMonth = "0"+str(currentMonth)
+        outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
+        selected_year = outbound_date.year
+        current_month = outbound_date.month
+
+        flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
+        headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+
+        for currentMonth in range(date.month, numberOfMonthsToTry + 1):
+            if currentMonth < 10:
+                currentMonth = "0" + str(currentMonth)
             start_day = 1
             if date.month == int(currentMonth):
                 start_day = date.day
-            for day in range(start_day, numberOfDaysInMonth[1]+1):
-                departureDate : str
-                returnDate : str
+            for day in range(start_day, numberOfDaysInMonth[1] + 1):
+                departureDate: str
+                returnDate: str
                 currentMonthWasIncreased = False
                 day = int(day)
-                returnDay = int(day+tripDays)
+                returnDay = int(day + tripDays)
                 currentMonth = int(currentMonth)
-                if day<10:
-                    day = "0"+str(day)
-                if int(currentMonth)<10:
-                    currentMonth = "0"+str(currentMonth)
+                if day < 10:
+                    day = "0" + str(day)
+                if int(currentMonth) < 10:
+                    currentMonth = "0" + str(currentMonth)
                 departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
-                if returnDay>numberOfDaysInMonth[1]:
-                    returnDay = returnDay-numberOfDaysInMonth[1]
-                    currentMonth = int(currentMonth)+1
+                if returnDay > numberOfDaysInMonth[1]:
+                    returnDay = returnDay - numberOfDaysInMonth[1]
+                    currentMonth = int(currentMonth) + 1
                     currentMonthWasIncreased = True
-                    if currentMonth<10:
-                        currentMonth = "0"+str(currentMonth)
-                if returnDay<10:
-                    returnDay = "0"+str(returnDay)
+                    if currentMonth < 10:
+                        currentMonth = "0" + str(currentMonth)
+                if returnDay < 10:
+                    returnDay = "0" + str(returnDay)
                 returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
 
-                country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
-
-                flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-                    FLIGHTS_API_URL, data['country'], data['currency_format'],
-                    data['originplace'], data['destinationplace'],
-                    departureDate, returnDate)
-
-                print(flightsBrowseRoutesURL)
+                payload = {
+                    "query": {
+                        "currency": data['currency_format'],
+                        "locale": "en-US",
+                        "market": data['country'],
+                        "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
+                        "queryLegs": [
+                            {
+                                "originPlace": {
+                                    "queryPlace": {
+                                        "iata": data['originplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "destinationPlace": {
+                                    "queryPlace": {
+                                        "iata": data['destinationplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "date_range": {
+                                    "startDate": {
+                                        "year": selected_year,
+                                        "month": current_month
+                                    },
+                                    "endDate": {
+                                        "year": selected_year,
+                                        "month": current_month
+                                    }
+                                }
+                            },
+                            {
+                                "originPlace": {
+                                    "queryPlace": {
+                                        "iata": data['destinationplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "destinationPlace": {
+                                    "queryPlace": {
+                                        "iata": data['originplace'].removesuffix('-sky')
+                                    }
+                                },
+                                "date_range": {
+                                    "startDate": {
+                                        "year": selected_year,
+                                        "month": current_month
+                                    },
+                                    "endDate": {
+                                        "year": selected_year,
+                                        "month": current_month
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
 
                 try:
-                    result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+                    result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
                     result.raise_for_status()
-                    jsonResult = json.loads(result.text)
-                    print(jsonResult)
+                    jsonResult = result.json()
 
                     if jsonResult.get('Quotes', None):
-                        if len(jsonResult['Quotes'])>0:
+                        if len(jsonResult['Quotes']) > 0:
                             finalFlightsList.append({
                                 'outbounddate': departureDate,
                                 'inbounddate': returnDate,
@@ -494,7 +776,7 @@ class CacheFlightHotelsPackage(APIView):
                         'price': 0
                     })
                 if currentMonthWasIncreased == True:
-                    currentMonth = int(currentMonth)-1
+                    currentMonth = int(currentMonth) - 1
                     print("THIS IS FLIGHTS", finalFlightsList)
         return finalFlightsList
 
