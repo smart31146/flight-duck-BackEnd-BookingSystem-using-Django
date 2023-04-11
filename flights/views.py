@@ -546,6 +546,7 @@ class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
 
     def hitFlightUrl(self, data, tripDays):
+        country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
         finalFlightsList = []
 
         outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
@@ -638,7 +639,7 @@ class CacheFlightHotelsPackage(APIView):
                         finalFlightsList.append({
                             'outbounddate': outbound_date.strftime('%Y-%m-%d'),
                             'inbounddate': inbound_date.strftime('%Y-%m-%d'),
-                            'carrier_name': jsonResult['Carriers'][0]['Name'],
+                            'carrier_name': "",
                             'price': float(quote_data['minPrice']['amount']),
                             'country': model_to_dict(country_name)['country_name'],
                         })
