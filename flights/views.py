@@ -128,28 +128,28 @@ class OfflineFlightsData:
 class BrowseRoutes(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
-        user_id = request.headers.get('user_id', None)
-        if user_id:
-            userExists = NewUser.objects.filter(id=user_id).all()
-            if len(userExists) > 0:
-                serializer = serializers.BrowseRouteModelFormSerializer(data=request.data)
-                if serializer.is_valid():
-                    flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
-                        FLIGHTS_API_URL, request.data['country'], request.data['currency_format'],
-                        request.data['origin'], request.data['destination'],
-                        request.data['departureDate'], request.data['returnDate'])
-                    result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
-
-                    if (result.status_code == 200):
-                        getFlightsData = OfflineFlightsData(json.loads(result.text)).processFlights()
-                        return Response(getFlightsData, status=status.HTTP_200_OK)
-                    else:
-                        return Response({'message': 'Something went wrong'},
-                                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            return Response({'message': 'No user exists with this id'}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
+    # def post(self, request, *args, **kwargs):
+    #     user_id = request.headers.get('user_id', None)
+    #     if user_id:
+    #         userExists = NewUser.objects.filter(id=user_id).all()
+    #         if len(userExists) > 0:
+    #             serializer = serializers.BrowseRouteModelFormSerializer(data=request.data)
+    #             if serializer.is_valid():
+    #                 flightsBrowseRoutesURL = '{0}browseroutes/v1.0/{1}/{2}/en-US/{3}/{4}/{5}/{6}'.format(
+    #                     FLIGHTS_API_URL, request.data['country'], request.data['currency_format'],
+    #                     request.data['origin'], request.data['destination'],
+    #                     request.data['departureDate'], request.data['returnDate'])
+    #                 result = requests.get(flightsBrowseRoutesURL, {'apiKey': FLIGHTS_API_KEY})
+    #
+    #                 if (result.status_code == 200):
+    #                     getFlightsData = OfflineFlightsData(json.loads(result.text)).processFlights()
+    #                     return Response(getFlightsData, status=status.HTTP_200_OK)
+    #                 else:
+    #                     return Response({'message': 'Something went wrong'},
+    #                                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    #         return Response({'message': 'No user exists with this id'}, status=status.HTTP_401_UNAUTHORIZED)
+    #     return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
 
 def storeLocaleInformation(request):
@@ -444,45 +444,52 @@ class FlightLivePrices(APIView):
             if serializer.is_valid():
                 print("SERIALIZER is valid")
                 date_obj_outbounddate = datetime.datetime.strptime(request.data['outbounddate'], '%Y-%m-%d')
-                date_obj_inbounddate = datetime.datetime.strptime(request.data['inbounddate'], '%Y-%m-%d')
                 if "inbounddate" in request.data:
-                    print("WE ARE IN THE INBOUND DATE")
-                    liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
-                    data = {
+                    date_obj_inbounddate = datetime.datetime.strptime(request.data['inbounddate'], '%Y-%m-%d')
+                else:
+                    date_obj_inbounddate = None
+
+                print("WE ARE IN THE INBOUND DATE")
+                liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
+
+                query_legs = [
+                    {
+                        "originPlaceId": {
+                            "iata": request.data['originplace'].removesuffix('-sky')
+                        },
+                        "destinationPlaceId": {
+                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                        },
+                        "date": {
+                            "year": date_obj_outbounddate.year,
+                            "month": date_obj_outbounddate.month,
+                            "day": date_obj_outbounddate.day
+                        }
+                    }
+                ]
+
+                if date_obj_inbounddate is not None:
+                    query_legs.append({
+                        "originPlaceId": {
+                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                        },
+                        "destinationPlaceId": {
+                            "iata": request.data['originplace'].removesuffix('-sky')
+                        },
+                        "date": {
+                            "year": date_obj_inbounddate.year,
+                            "month": date_obj_inbounddate.month,
+                            "day": date_obj_inbounddate.day
+                        }
+                    })
+
+                data = {
                     "query": {
                         'market': request.data['country'],
                         'currency': request.data['currency'],
                         'locale': request.data['locale'],
                         'adults': request.data['adults'],
-                        "queryLegs": [
-                            {
-                                "originPlaceId": {
-                                    "iata": request.data['originplace'].removesuffix('-sky')
-                                },
-                                "destinationPlaceId": {
-                                    "iata": request.data['destinationplace'].removesuffix('-sky')
-                                },
-                                "date": {
-                                    "year": date_obj_outbounddate.year,
-                                    "month": date_obj_outbounddate.month,
-                                    "day": date_obj_outbounddate.day
-                                }
-                            },
-                            {
-                                "originPlaceId": {
-                                    "iata": request.data['destinationplace'].removesuffix('-sky')
-                                },
-                                "destinationPlaceId": {
-                                    "iata": request.data['originplace'].removesuffix('-sky')
-                                },
-                                "date": {
-                                    "year": date_obj_inbounddate.year,
-                                    "month": date_obj_inbounddate.month,
-                                    "day": date_obj_inbounddate.day
-                                }
-                            }
-
-                         ],
+                        "queryLegs": query_legs,
                         "childrenAges": [],
                         "cabinClass": "CABIN_CLASS_ECONOMY",
                         "excludedAgentsIds": [],
@@ -490,20 +497,8 @@ class FlightLivePrices(APIView):
                         "includedAgentsIds": [],
                         "includedCarriersIds": []
                     }
-                  }
-#                 else:
-#                     liveFlightsPricingURL = FLIGHTS_API_URL + 'v3/flights/live/search/create'
-#                     data = {
-#                         'country': request.data['country'],
-#                         'currency': request.data['currency'],
-#                         'locale': request.data['locale'],
-#                         'locationSchema': 'iata',
-#                         'originplace': request.data['originplace'],
-#                         'destinationplace': request.data['destinationplace'],
-#                         'outbounddate': request.data['outbounddate'],
-#                         'adults': request.data['adults'],
-#                         'apikey': FLIGHTS_API_KEY
-#                     }
+                }
+
                 print("THIS IS DATA")
                 print(data)
                 print("THIS IS URL")
@@ -554,62 +549,68 @@ class CacheFlightHotelsPackage(APIView):
         selected_month = outbound_date.month
 
         flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
-
+        print("Below is data recieved fromt front end")
+        print(data)
+        legs = [
+            {
+                "originPlace": {
+                    "queryPlace": {
+                        "iata": data['originplace'].removesuffix('-sky')
+                    }
+                },
+                "destinationPlace": {
+                    "queryPlace": {
+                        "iata": data['destinationplace'].removesuffix('-sky')
+                    }
+                },
+                "date_range": {
+                    "startDate": {
+                        "year": selected_year,
+                        "month": selected_month
+                    },
+                    "endDate": {
+                        "year": selected_year,
+                        "month": selected_month
+                    }
+                }
+            }
+        ]
+        
+        if 'inbounddate' in data:
+            legs.append({
+                "originPlace": {
+                    "queryPlace": {
+                        "iata": data['destinationplace'].removesuffix('-sky')
+                    }
+                },
+                "destinationPlace": {
+                    "queryPlace": {
+                        "iata": data['originplace'].removesuffix('-sky')
+                    }
+                },
+                "date_range": {
+                    "startDate": {
+                        "year": selected_year,
+                        "month": selected_month
+                    },
+                    "endDate": {
+                        "year": selected_year,
+                        "month": selected_month
+                    }
+                }
+            })
+        
         payload = {
             "query": {
                 "currency": data['currency_format'],
                 "locale": "en-US",
                 "market": data['country'],
                 "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
-                "queryLegs": [
-                    {
-                        "originPlace": {
-                            "queryPlace": {
-                                "iata": data['originplace'].removesuffix('-sky')
-                            }
-                        },
-                        "destinationPlace": {
-                            "queryPlace": {
-                                "iata": data['destinationplace'].removesuffix('-sky')
-                            }
-                        },
-                        "date_range": {
-                            "startDate": {
-                                "year": selected_year,
-                                "month": selected_month
-                            },
-                            "endDate": {
-                                "year": selected_year,
-                                "month": selected_month
-                            }
-                        }
-                    },
-                    {
-                        "originPlace": {
-                            "queryPlace": {
-                                "iata": data['destinationplace'].removesuffix('-sky')
-                            }
-                        },
-                        "destinationPlace": {
-                            "queryPlace": {
-                                "iata": data['originplace'].removesuffix('-sky')
-                            }
-                        },
-                        "date_range": {
-                            "startDate": {
-                                "year": selected_year,
-                                "month": selected_month
-                            },
-                            "endDate": {
-                                "year": selected_year,
-                                "month": selected_month
-                            }
-                        }
-                    }
-                ]
+                "queryLegs": legs
             }
         }
 
+        print("this is payload")
         print(payload)
 
         headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
@@ -629,9 +630,20 @@ class CacheFlightHotelsPackage(APIView):
                                                   quote_data['outboundLeg']['departureDateTime']['month'],
                                                   quote_data['outboundLeg']['departureDateTime']['day'])
 
-                    inbound_date = datetime.date(quote_data['inboundLeg']['departureDateTime']['year'],
-                                                 quote_data['inboundLeg']['departureDateTime']['month'],
-                                                 quote_data['inboundLeg']['departureDateTime']['day'])
+            has_inbound_date = 'inbounddate' in data
+
+            if quotes:
+                for quote_key, quote_data in quotes.items():
+                    outbound_date = datetime.date(quote_data['outboundLeg']['departureDateTime']['year'],
+                                                  quote_data['outboundLeg']['departureDateTime']['month'],
+                                                  quote_data['outboundLeg']['departureDateTime']['day'])
+
+                    if has_inbound_date and 'inboundLeg' in quote_data:
+                        inbound_date = datetime.date(quote_data['inboundLeg']['departureDateTime']['year'],
+                                                     quote_data['inboundLeg']['departureDateTime']['month'],
+                                                     quote_data['inboundLeg']['departureDateTime']['day'])
+                    else:
+                        inbound_date = outbound_date + datetime.timedelta(days=tripDays)
 
                     days_between = inbound_date - outbound_date
                     if days_between.days == tripDays:
@@ -643,6 +655,8 @@ class CacheFlightHotelsPackage(APIView):
                             'price': float(quote_data['minPrice']['amount']),
                             'country': model_to_dict(country_name)['country_name'],
                         })
+
+
         except requests.exceptions.HTTPError as e:
             finalFlightsList.append({
                 'outbounddate': '01/08/2022',
