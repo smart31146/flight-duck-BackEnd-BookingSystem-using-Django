@@ -1028,11 +1028,6 @@ class CacheFlightHotelsPackage(APIView):
         print(len(finalHotelsList))
         return finalHotelsList
     def findBestPackages(self, offlineFlightResults, hotelDeals):
-
-    # Check cache
-        cached_best_packages_list = cache.get(self.CACHE_KEY)
-        if cached_best_packages_list is not None:
-            return cached_best_packages_list
         bestPackagesList = []
         # print("number of offline flight results=========", len(offlineFlightResults))
         # print("number of hotelDeals results=========", len(hotelDeals))
@@ -1084,7 +1079,6 @@ class CacheFlightHotelsPackage(APIView):
         print("Below is bestPackages list length")
         print(len(bestPackagesList))
 
-        cache.set(self.CACHE_KEY, bestPackagesList, self.CACHE_TIMEOUT)
         return bestPackagesList
 
     def post(self, request, *args, **kwargs):
