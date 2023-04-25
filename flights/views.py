@@ -536,9 +536,33 @@ class FlightLivePrices(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
 
+class Cache:
+    def __init__(self):
+        self.cache = {}
 
+    def set(self, key, value, timeout):
+        self.cache[key] = {
+            'value': value,
+            'expires_at': time.time() + timeout
+        }
+
+    def get(self, key):
+        if key not in self.cache:
+            return None
+
+        cached_value = self.cache[key]
+
+        if time.time() > cached_value['expires_at']:
+            del self.cache[key]
+            return None
+
+        return cached_value['value']
+
+cache = Cache()
 class CacheFlightHotelsPackage(APIView):
     permission_classes = [AllowAny]
+    CACHE_KEY = 'best_packages_list'
+    CACHE_TIMEOUT = 4 * 60 * 60  # 4 hours in seconds
 
     def hitFlightUrl(self, data, tripDays):
         country_name = hotelModels.HotelCountry.objects.filter(country_code=data['country']).first()
@@ -1003,8 +1027,12 @@ class CacheFlightHotelsPackage(APIView):
         print("Below is finalhotels list length")
         print(len(finalHotelsList))
         return finalHotelsList
-
     def findBestPackages(self, offlineFlightResults, hotelDeals):
+
+    # Check cache
+        cached_best_packages_list = cache.get(self.CACHE_KEY)
+        if cached_best_packages_list is not None:
+            return cached_best_packages_list
         bestPackagesList = []
         # print("number of offline flight results=========", len(offlineFlightResults))
         # print("number of hotelDeals results=========", len(hotelDeals))
@@ -1055,6 +1083,8 @@ class CacheFlightHotelsPackage(APIView):
             # break
         print("Below is bestPackages list length")
         print(len(bestPackagesList))
+
+        cache.set(self.CACHE_KEY, bestPackagesList, self.CACHE_TIMEOUT)
         return bestPackagesList
 
     def post(self, request, *args, **kwargs):
@@ -1070,10 +1100,23 @@ class CacheFlightHotelsPackage(APIView):
             package_serializer = serializers.FlightsHotelPackageSerializer(data=request.data)
             if package_serializer.is_valid():
                 # TODO: Use services.package_service
-                offlineFlightData = self.getOfflineFlightsResult(data=request.data)
-                # offlineFlightData = []
-                hotelDeals = self.getHotelDeals(requestData=request.data, flightList=offlineFlightData)
-                finalList = self.findBestPackages(offlineFlightData, hotelDeals)
+
+                # Generate a unique cache key based on request payload
+                payload_hash = hashlib.sha256(repr(request.data).encode('utf-8')).hexdigest()
+                unique_cache_key = f"{self.CACHE_KEY}_{payload_hash}"
+
+                # Check cache
+                cached_best_packages_list = cache.get(unique_cache_key)
+                if cached_best_packages_list is not None:
+                    # Use cached result
+                    finalList = cached_best_packages_list
+                else:
+                    # Calculate result and cache it
+                    offlineFlightData = self.getOfflineFlightsResult(data=request.data)
+                    hotelDeals = self.getHotelDeals(requestData=request.data, flightList=offlineFlightData)
+                    finalList = self.findBestPackages(offlineFlightData, hotelDeals)
+                    cache.set(unique_cache_key, finalList, self.CACHE_TIMEOUT)
+
                 return Response({
                     'message': 'Success',
                     'list': finalList
@@ -1081,6 +1124,8 @@ class CacheFlightHotelsPackage(APIView):
 
             return Response(package_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'No user id found'}, status=status.HTTP_406_NOT_ACCEPTABLE)
+
+
 
 
 class GetCountries(APIView):
