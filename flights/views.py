@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import codecs
 from pprint import pprint
+from datetime import timedelta
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -54,19 +55,31 @@ def createXSignature():
 class AutoSuggest(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, format='json'):
-        flightsDestinationAutoSuggestion = '{0}autosuggest/v1.0/US/USD/en-US'.format(FLIGHTS_API_URL)
+def post(self, request, format='json'):
+    # TODO change this endpoint for local based on country
+    print("in autosuiggest")
+    flights_destination_auto_suggestion = '{0}autosuggest/v3/geo/hierarchy/flights/en-AU'.format(FLIGHTS_API_URL)
 
-        serializer = serializers.AutoSuggestModelFormSerializer(data=request.data)
-        if serializer.is_valid():
-            query = serializer.data['query']
-            result = requests.get(flightsDestinationAutoSuggestion, {'query': query, 'apiKey': FLIGHTS_API_KEY})
+    serializer = serializers.AutoSuggestModelFormSerializer(data=request.data)
+    if serializer.is_valid():
+        query = serializer.data['query']
+        headers = {'apiKey': FLIGHTS_API_KEY}
+        result = requests.get(flights_destination_auto_suggestion, params={'query': query}, headers=headers)
 
-            if (result.status_code == 200):
-                return Response(json.loads(result.text), status=status.HTTP_200_OK)
-            else:
-                return Response({'message': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if result.status_code == 200:
+            response_data = json.loads(result.text)
+            places_map = response_data['placesMap']
+            # Filter out airports that do not serve commercial flights
+            filtered_places = {k: v for k, v in places_map.items() if not (v['type'] == 'airport' and v['commercial'] == False)}
+            # Flatten the response data
+            flat_response = []
+            for _, place in filtered_places.items():
+                flat_response.append(place)
+            return Response(flat_response, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class OfflineFlightsData:
@@ -471,10 +484,10 @@ class FlightLivePrices(APIView):
                 if date_obj_inbounddate is not None:
                     query_legs.append({
                         "originPlaceId": {
-                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                            "iata": request.data['originplace'].removesuffix('-sky')
                         },
                         "destinationPlaceId": {
-                            "iata": request.data['originplace'].removesuffix('-sky')
+                            "iata": request.data['destinationplace'].removesuffix('-sky')
                         },
                         "date": {
                             "year": date_obj_inbounddate.year,
@@ -518,12 +531,12 @@ class FlightLivePrices(APIView):
                     results = self.getPollResults()
                     original_stdout = sys.stdout
 
-                    with open('C:/filewrite/flights.txt', 'w') as f:
-                        sys.stdout = f
-                        print('Hello, Python!')
-                        print(json.dumps(results, indent=4, sort_keys=True, default=str))
-                        # Reset the standard output
-                        sys.stdout = original_stdout
+                    # with open('C:/filewrite/flights.txt', 'w') as f:
+                    #     sys.stdout = f
+                    #     print('Hello, Python!')
+                    #     print(json.dumps(results, indent=4, sort_keys=True, default=str))
+                    #     # Reset the standard output
+                    #     sys.stdout = original_stdout
 
                     return Response({
                         'message': 'Found {} results'.format(len(results['list'] )),
@@ -693,130 +706,129 @@ class CacheFlightHotelsPackage(APIView):
 
 
 
-    def getLiveFlightsWhenNoResultsForCache(self, data):
-        date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        numberOfMonthsToTry = date.month + data['number_of_extended_months']
-        numberOfDaysInMonth = monthrange(date.year, date.month)
-        tripDays = int(data['trip_days'])
+    def getLiveFlightsWhenNoResultsForCache(self, request_data):
+        print("belwowoowowow")
+        trip_days = request_data['trip_days']
+        print(request_data)
+        country_name = hotelModels.HotelCountry.objects.filter(country_code=request_data['country']).first()
         finalFlightsList = []
-        outbound_date = datetime.datetime.strptime(data['outbounddate'], '%Y-%m-%d')
-        selected_year = outbound_date.year
-        current_month = outbound_date.month
-
-        flights_indicative_search_url = f'{FLIGHTS_API_URL}v3/flights/indicative/search'
+        flights_indicative_search_url = FLIGHTS_API_URL + 'v3/flights/live/search/create'
         headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
+        for i in range(3):
+            outbound_date_obj = datetime.datetime.strptime(request_data['outbounddate'], '%Y-%m-%d')
+            outbound_date_obj += timedelta(days=i)
+            selected_year, currentMonth, outboundDay = outbound_date_obj.year, outbound_date_obj.month, outbound_date_obj.day
 
-        for currentMonth in range(date.month, numberOfMonthsToTry + 1):
-            if currentMonth < 10:
-                currentMonth = "0" + str(currentMonth)
-            start_day = 1
-            if date.month == int(currentMonth):
-                start_day = date.day
-            for day in range(start_day, numberOfDaysInMonth[1] + 1):
-                departureDate: str
-                returnDate: str
-                currentMonthWasIncreased = False
-                day = int(day)
-                returnDay = int(day + tripDays)
-                currentMonth = int(currentMonth)
-                if day < 10:
-                    day = "0" + str(day)
-                if int(currentMonth) < 10:
-                    currentMonth = "0" + str(currentMonth)
-                departureDate = str(date.year) + "-" + str(currentMonth) + "-" + str(day)
-                if returnDay > numberOfDaysInMonth[1]:
-                    returnDay = returnDay - numberOfDaysInMonth[1]
-                    currentMonth = int(currentMonth) + 1
-                    currentMonthWasIncreased = True
-                    if currentMonth < 10:
-                        currentMonth = "0" + str(currentMonth)
-                if returnDay < 10:
-                    returnDay = "0" + str(returnDay)
-                returnDate = str(date.year) + "-" + str(currentMonth) + "-" + str(returnDay)
+            inbound_date_obj = None
+            inbound_date_str = request_data.get('inbounddate', None)
+            if inbound_date_str:
+                inbound_date_obj = datetime.datetime.strptime(inbound_date_str, '%Y-%m-%d')
+                inbound_date_obj += timedelta(days=i)
+            else:
+                print("The 'inbounddate' key is not present in the request_data dictionary.")
 
-                payload = {
-                    "query": {
-                        "currency": data['currency_format'],
-                        "locale": "en-US",
-                        "market": data['country'],
-                        "dateTimeGroupingType": "DATE_TIME_GROUPING_TYPE_BY_DATE",
-                        "queryLegs": [
-                            {
-                                "originPlace": {
-                                    "queryPlace": {
-                                        "iata": data['originplace'].removesuffix('-sky')
-                                    }
-                                },
-                                "destinationPlace": {
-                                    "queryPlace": {
-                                        "iata": data['destinationplace'].removesuffix('-sky')
-                                    }
-                                },
-                                "date_range": {
-                                    "startDate": {
-                                        "year": selected_year,
-                                        "month": current_month
-                                    },
-                                    "endDate": {
-                                        "year": selected_year,
-                                        "month": current_month
-                                    }
-                                }
-                            },
-                            {
-                                "originPlace": {
-                                    "queryPlace": {
-                                        "iata": data['destinationplace'].removesuffix('-sky')
-                                    }
-                                },
-                                "destinationPlace": {
-                                    "queryPlace": {
-                                        "iata": data['originplace'].removesuffix('-sky')
-                                    }
-                                },
-                                "date_range": {
-                                    "startDate": {
-                                        "year": selected_year,
-                                        "month": current_month
-                                    },
-                                    "endDate": {
-                                        "year": selected_year,
-                                        "month": current_month
-                                    }
-                                }
-                            }
-                        ]
+            if inbound_date_obj:
+                _, _, returnDay = inbound_date_obj.year, inbound_date_obj.month, inbound_date_obj.day
+            else:
+                returnDay = None
+
+            query_legs = [
+                {
+                    "originPlaceId": {
+                        "iata": request_data['originplace'].removesuffix('-sky')
+                    },
+                    "destinationPlaceId": {
+                        "iata": request_data['destinationplace'].removesuffix('-sky')
+                    },
+                    "date": {
+                        "year": selected_year,
+                        "month": currentMonth,
+                        "day": outboundDay
                     }
                 }
+            ]
 
-                try:
-                    result = requests.post(flights_indicative_search_url, headers=headers, json=payload)
-                    result.raise_for_status()
-                    jsonResult = result.json()
+            if inbound_date_obj is not None:
+                query_legs.append({
+                    "originPlaceId": {
+                        "iata": request_data['originplace'].removesuffix('-sky')
+                    },
+                    "destinationPlaceId": {
+                        "iata": request_data['destinationplace'].removesuffix('-sky')
+                    },
+                    "date": {
+                        "year": selected_year,
+                        "month": currentMonth,
+                        "day": returnDay
+                    }
+                })
 
-                    if jsonResult.get('Quotes', None):
-                        if len(jsonResult['Quotes']) > 0:
+            data = {
+                "query": {
+                    'market': request_data['country'],
+                    'currency': request_data['currency_format'],
+                    'locale': "en-US",
+                    'adults': request_data['adults'],
+                    "queryLegs": query_legs,
+                    "childrenAges": [],
+                    "cabinClass": "CABIN_CLASS_ECONOMY",
+                    "excludedAgentsIds": [],
+                    "excludedCarriersIds": [],
+                    "includedAgentsIds": [],
+                    "includedCarriersIds": []
+                }
+            }
+
+            print("this is request being sent")
+            print(data)
+
+            try:
+                result = requests.post(flights_indicative_search_url, headers=headers, data=json.dumps(data))
+                result.raise_for_status()
+                jsonResult = result.json()
+
+                if jsonResult.get('content', {}).get('results', {}).get('itineraries', None):
+                    itineraries = jsonResult['content']['results']['itineraries']
+                    for itinerary_id, itinerary in itineraries.items():
+                        if itinerary.get('pricingOptions', None):
+                            for option in itinerary['pricingOptions']:
+                                price = option['price']['amount']
+                                carrier_name = None
+                                if option.get('items', None):
+                                    item = option['items'][0]
+                                    if item.get('fares', None):
+                                        carrier_name = option['agentIds'][0]
+
+                                finalFlightsList.append({
+                                    'outbounddate': datetime.datetime.strptime(request_data['outbounddate'], '%Y-%m-%d').strftime('%Y-%m-%d'),
+                                    'inbounddate': (datetime.datetime.strptime(request_data['outbounddate'], '%Y-%m-%d') + timedelta(days=trip_days)).strftime('%Y-%m-%d'),
+                                    'carrier_name': carrier_name,
+                                    'price': price,
+                                    'country': model_to_dict(country_name)['country_name']
+                                })
+
+
+                        else:
                             finalFlightsList.append({
-                                'outbounddate': departureDate,
-                                'inbounddate': returnDate,
-                                'carrier_name': jsonResult['Carriers'][0]['Name'],
-                                'price': jsonResult['Quotes'][0]['MinPrice'],
-                                'country': model_to_dict(country_name)['country_name']
+                                'outbounddate': outboundDay,
+                                'inbounddate': returnDay,
+                                'carrier_name': '',
+                                'price': 0
                             })
-                except requests.exceptions.HTTPError as e:
-                    print("flight requests exception========", e)
-                    print("for date====", departureDate)
-                    print()
-                    finalFlightsList.append({
-                        'outbounddate': departureDate,
-                        'inbounddate': returnDate,
-                        'carrier_name': '',
-                        'price': 0
-                    })
-                if currentMonthWasIncreased == True:
-                    currentMonth = int(currentMonth) - 1
-                    print("THIS IS FLIGHTS", finalFlightsList)
+            except requests.exceptions.HTTPError as e:
+                print("flight requests exception========", e)
+                print("for date====", outboundDay)
+                print()
+                finalFlightsList.append({
+                    'outbounddate': outboundDay,
+                    'inbounddate': returnDay,
+                    'carrier_name': '',
+                    'price': 0
+                })
+        print("bebloiw is finalflights")
+        print(finalFlightsList)
         return finalFlightsList
+
 
 
     def getOfflineFlightsResult(self, data):
@@ -828,9 +840,14 @@ class CacheFlightHotelsPackage(APIView):
         if len(finalFlightsList) < 3:
             print("god i hope this works")
             finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
+        # finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
         return finalFlightsList
 
     def list_split(self, listA, n):
+        print("below is listA")
+        print(listA)
+        print("below is n")
+        print(n)
         for x in range(0, len(listA), n):
             every_chunk = listA[x: n + x]
 
@@ -850,6 +867,8 @@ class CacheFlightHotelsPackage(APIView):
         }
         # hotelsList = list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))
         # print("hotelsList========", hotelsList)
+        print("below is requestdata")
+        print(requestData)
         date = datetime.datetime.strptime(requestData['outbounddate'], '%Y-%m-%d')
         numberOfMonthsToTry = date.month + requestData['number_of_extended_months']
         numberOfDaysInMonth = monthrange(date.year, date.month)
@@ -871,7 +890,12 @@ class CacheFlightHotelsPackage(APIView):
         print(requestData['destination_code'])
         print("below is hotelCodes")
         print(len(hotelCodes))
+        print("below is flight")
+        print(len(flightList))
         divideBy = int(int(len(hotelCodes)) / (int(len(flightList))))
+        print("hotelcodes and flight below")
+        print(int(int(len(hotelCodes))))
+        print((int(len(flightList))))
         hotelListDivided = list(self.list_split(hotelCodes, divideBy))
 
         # print("this is divided 0")
@@ -897,6 +921,9 @@ class CacheFlightHotelsPackage(APIView):
         print(len(flightList))
         print("This is hotel list that needs to be equal or less then flights")
         print(len(hotelListDivided))
+
+        print("THIS IS HOTELREQUESTDATATATA")
+        print(requestData)
 
         for i in flightList:
             # algo to divide array into 5's (but play around) and then loop through that array on the condition that if the next set of numbers is greater then grab the last numbers and
@@ -927,7 +954,8 @@ class CacheFlightHotelsPackage(APIView):
                 }
             }
             # print(liveHotelsPricingURL)
-            # print(data)
+            print("this is what we are hitting hotel")
+            print(data)
             try:
                 result = requests.post(
                     liveHotelsPricingURL,
@@ -1027,6 +1055,34 @@ class CacheFlightHotelsPackage(APIView):
         print("Below is finalhotels list length")
         print(len(finalHotelsList))
         return finalHotelsList
+
+    def findCheapestPackages(self, bestPackagesList):
+        date_price_dict = {}
+
+        # Traverse through each package
+        for package in bestPackagesList:
+            date = package['outbounddate']
+            price = package['deal_price']
+
+            # If this date is not in the dictionary, or this price is cheaper than the current value, update the dictionary
+            if date not in date_price_dict or price < date_price_dict[date]:
+                date_price_dict[date] = price
+
+        min_price = min(date_price_dict.values())
+
+        # Create list of dictionaries with date, price, and color
+        cheapest_prices_per_date = []
+        for date, price in date_price_dict.items():
+            if price == min_price:
+                color = "green"
+            elif price <= 1.4 * min_price:
+                color = "orange"
+            else:
+                color = "red"
+            cheapest_prices_per_date.append({"date": date, "price": price, "color": color})
+
+        return cheapest_prices_per_date
+
     def findBestPackages(self, offlineFlightResults, hotelDeals):
         bestPackagesList = []
         # print("number of offline flight results=========", len(offlineFlightResults))
@@ -1057,9 +1113,9 @@ class CacheFlightHotelsPackage(APIView):
                         (float(flight['price']) != 0)
                 ):
                     number += 1
-                    print("match found")
-                    print("Total matches")
-                    print(number)
+                    # print("match found")
+                    # print("Total matches")
+                    # print(number)
 
                     total_price = float(flight['price']) + (float(hotel['price']))
                     bestPackagesList.append({
@@ -1078,6 +1134,10 @@ class CacheFlightHotelsPackage(APIView):
             # break
         print("Below is bestPackages list length")
         print(len(bestPackagesList))
+        cheapest_prices = self.findCheapestPackages(bestPackagesList)
+        print("below is cheapest prices")
+        print(cheapest_prices)
+        bestPackagesList.append({'calendar': cheapest_prices})
 
         return bestPackagesList
 
