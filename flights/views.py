@@ -114,6 +114,8 @@ class OfflineFlightsData:
     def processFlights(self):
         processedData = []
 
+        print(self.flightsData)
+
         for quotes in self.flightsData['Quotes']:
             destination, destination_city, destination_country = self.getDestination(
                 quotes['OutboundLeg']['DestinationId'])
@@ -333,7 +335,7 @@ class LiveFlightsData:
         finalList = {}
         processedData = []
         print("processFlightsprocessFlightsprocessFlightsprocessFlightsprocessFlights")
-        # print(self.flightsData)
+        print(self.flightsData)
 
         # flightDataItinerariesList = list(self.flightsData.items())
         flightDataItinerariesList = list(self.flightsData['content']['results']['itineraries'].items())
@@ -424,15 +426,24 @@ class FlightLivePrices(APIView):
     print("WE ARE IN THE FLIGHT LIVE PRICES")
 
     def getPollResults(self):
+        print("below is session token in poll")
+        print(self.sessionToken)
         pollResultsURL = FLIGHTS_API_URL + 'v3/flights/live/search/poll/' + self.sessionToken
+        print(pollResultsURL)
         headers = {'x-api-key': FLIGHTS_API_KEY, 'Content-Type': 'application/json'}
         print(headers)
         result = requests.post(
             pollResultsURL, headers=headers,
         )
+        print("below is result")
+        print(json.loads(result.text))
 
         if (result.status_code == 200):
+            print("we are in poll")
+            print(LiveFlightsData(json.loads(result.text)).processFlights())
             getFlightsData = LiveFlightsData(json.loads(result.text)).processFlights()
+            print("below is flightdatsa")
+            print(getFlightsData)
             return getFlightsData
         else:
             print("WE GOT A ERROR HERE")
@@ -484,10 +495,10 @@ class FlightLivePrices(APIView):
                 if date_obj_inbounddate is not None:
                     query_legs.append({
                         "originPlaceId": {
-                            "iata": request.data['originplace'].removesuffix('-sky')
+                            "iata": request.data['destinationplace'].removesuffix('-sky')
                         },
                         "destinationPlaceId": {
-                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                            "iata": request.data['originplace'].removesuffix('-sky')
                         },
                         "date": {
                             "year": date_obj_inbounddate.year,
@@ -521,6 +532,8 @@ class FlightLivePrices(APIView):
                     data=json.dumps(data),
                     headers=headers,
                 )
+                print("below is json request")
+                print(json.dumps(data))
                 print("below is status code")
                 print(result.status_code)
 
@@ -528,6 +541,8 @@ class FlightLivePrices(APIView):
                     print("SUCCESS")
                     response_data = result.json()
                     self.sessionToken = response_data['sessionToken']
+                    print("below is session token in create")
+                    print(self.sessionToken)
                     results = self.getPollResults()
                     original_stdout = sys.stdout
 
