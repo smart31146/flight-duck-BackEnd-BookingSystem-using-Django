@@ -30,6 +30,12 @@ import pandas as pd
 import codecs
 from pprint import pprint
 from datetime import timedelta
+import io
+from django.core.mail import send_mail
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+from backend.settings import EMAIL_HOST_USER
 
 HOTELS_API_URL = "https://api.test.hotelbeds.com"
 HOTELS_API_KEY = "ce0f06ea4efa6d559dd869faae735266"
@@ -138,6 +144,22 @@ class OfflineFlightsData:
                 'direct': direct
             })
         return processedData
+
+
+class SendBookingConfirmation(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email_address = request.data['email_address']
+        hotel_object = request.data['hotel_object']
+        subject = 'Hotel Booking Confirmation'
+        message = f'Dear {email_address},\n\nYour booking has been confirmed. Here are the details:\n\n{hotel_object}'
+        email_from = settings.EMAIL_HOST_USER
+        recipient_list = [email_address, ]
+        send_mail(subject, message, email_from, recipient_list)
+        return JsonResponse({'message': 'Email sent successfully'})
+
+
 
 
 class BrowseRoutes(APIView):
@@ -801,6 +823,10 @@ class CacheFlightHotelsPackage(APIView):
                 result = requests.post(flights_indicative_search_url, headers=headers, data=json.dumps(data))
                 result.raise_for_status()
                 jsonResult = result.json()
+                file_path = "C:/FlightDuck/flight-duck-backend-aws-main/flights/flights_output_skyscanner.txt"
+                flights_json = json.dumps(jsonResult)
+                with open(file_path, 'w') as file:
+                    file.write(flights_json)
 
                 if jsonResult.get('content', {}).get('results', {}).get('itineraries', None):
                     itineraries = jsonResult['content']['results']['itineraries']
@@ -842,6 +868,10 @@ class CacheFlightHotelsPackage(APIView):
                 })
         print("bebloiw is finalflights")
         print(finalFlightsList)
+        file_path = "C:/FlightDuck/flight-duck-backend-aws-main/flights/flights_output.txt"
+        flights_json = json.dumps(finalFlightsList)
+        with open(file_path, 'w') as file:
+            file.write(flights_json)
         return finalFlightsList
 
 
@@ -852,9 +882,9 @@ class CacheFlightHotelsPackage(APIView):
         # make below into a function then we will call it with the days variable and if returned 0 then we add 1 to the days and try again. If that doesnt work then - 1 and then if that doesnt work then thats it.
         # Also if the return date is in the same month and its more days then whats left in the month then we go to the next month. Watch out for double digits!
         finalFlightsList = self.hitFlightUrl(data, tripDays)
-        if len(finalFlightsList) < 3:
-            print("god i hope this works")
-            finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
+        # if len(finalFlightsList) < 3:
+        #     print("god i hope this works")
+        #     finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
         # finalFlightsList = self.getLiveFlightsWhenNoResultsForCache(data)
         return finalFlightsList
 

@@ -9,5 +9,5 @@ urlpatterns = [
     path('store-currency/', views.storeCurrenciesInformation, name="store-currency"),
     path('cache-flight-hotels-package/', views.CacheFlightHotelsPackage.as_view(), name="cache-flight-hotels-package"),
     path('get-countries/', views.GetCountries.as_view(), name="get-countries"),
-    path('get-airport-code/', views.GetAirportCode.as_view(), name="get-airport-code"),    
+    path('get-airport-code/', views.GetAirportCode.as_view(), name="get-airport-code"),
 ]
