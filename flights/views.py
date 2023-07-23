@@ -866,12 +866,12 @@ class CacheFlightHotelsPackage(APIView):
                     'carrier_name': '',
                     'price': 0
                 })
-        print("bebloiw is finalflights")
-        print(finalFlightsList)
-        file_path = "C:/FlightDuck/flight-duck-backend-aws-main/flights/flights_output.txt"
-        flights_json = json.dumps(finalFlightsList)
-        with open(file_path, 'w') as file:
-            file.write(flights_json)
+        # print("bebloiw is finalflights")
+        # print(finalFlightsList)
+        # file_path = "C:/FlightDuck/flight-duck-backend-aws-main/flights/flights_output.txt"
+        # flights_json = json.dumps(finalFlightsList)
+        # with open(file_path, 'w') as file:
+        #     file.write(flights_json)
         return finalFlightsList
 
 
@@ -924,12 +924,16 @@ class CacheFlightHotelsPackage(APIView):
         # flightObj = flightList[0]['outbounddate']
         # print(flightObj)
         # print(type(flightObj))
-        # print("DOPES THIS WORKWE:@??????? HELLO HELLO HELLO AYE AYE AYE FR FR FR ")
         # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True))[0])
         # print(list(hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code', flat=True)))
         hotelCodes = list(
-            hotelModels.HotelDetail.objects.filter(destination_code=requestData['destination_code']).values_list('code',
-                                                                                                                 flat=True))
+            hotelModels.HotelDetail.objects.filter(
+                destination_code=requestData['destination_code'],
+                city__iexact=requestData['destinationName']
+            ).values_list('code', flat=True)
+        )
+
+
         # hotelListDivided = np.array_split(hotelCodes, len(flightList))
         print("below is destination code")
         print(requestData['destination_code'])
@@ -1128,40 +1132,42 @@ class CacheFlightHotelsPackage(APIView):
 
         return cheapest_prices_per_date
 
+    def findBestDealPackage(self, bestPackagesList):
+        # Check if the list is not empty
+        if bestPackagesList:
+            # Find the cheapest package
+            cheapest_package = next((package for package in bestPackagesList if package['cheapest'] == True), None)
+
+            if cheapest_package:
+                # Set the maximum price for the best deal as 40% more than the cheapest
+                max_price = cheapest_package['deal_price'] * 1.40
+
+                # Get packages that are under the max price and have ratings
+                valid_packages = [package for package in bestPackagesList
+                                  if 'deal_price' in package and package['deal_price'] <= max_price
+                                  and 'hotel_object' in package
+                                  and 'rating' in package['hotel_object']]
+
+                if valid_packages:
+                    # Get the package with the highest rating among the valid packages
+                    best_deal_package = max(valid_packages, key=lambda x: x['hotel_object']['rating'])
+                    # Mark the package as the 'bestDeal'
+                    best_deal_package['bestDeal'] = True
+
+        return bestPackagesList
+
+
     def findBestPackages(self, offlineFlightResults, hotelDeals):
         bestPackagesList = []
-        # print("number of offline flight results=========", len(offlineFlightResults))
-        # print("number of hotelDeals results=========", len(hotelDeals))
-        # return []
-        # print("below is a hotel object")
-        # print(hotelDeals[0])
-        # print("below is a flight object")
-        # print(offlineFlightResults[0])
         number = 0
-        # TODO: Use the array that is longer to iterate through
-        for hotel in hotelDeals:
-            print("hotel DATES")
-            print(hotel['outbounddate'], " TO ", hotel['inbounddate'])
-        # print("hotel price=======", hotel['price'])
-        # print()
         for flight in offlineFlightResults:
-            # print("============single details======")
-            # print("flight outbounddate=======", flight['outbounddate'])
-            # print("flight price=======", flight['price'])
-            # print(flight)
             for hotel in hotelDeals:
-                # print("hotel price=======", hotel['price'])
-                # print()
                 if (
                         (flight['outbounddate'] == hotel['outbounddate']) &
                         (float(hotel['price']) != 0) &
                         (float(flight['price']) != 0)
                 ):
                     number += 1
-                    # print("match found")
-                    # print("Total matches")
-                    # print(number)
-
                     total_price = float(flight['price']) + (float(hotel['price']))
                     bestPackagesList.append({
                         'outbounddate': flight['outbounddate'],
@@ -1174,17 +1180,23 @@ class CacheFlightHotelsPackage(APIView):
                         'hotel': hotel['hotel']['hotel'] if hotel['hotel']['hotel'] else [],
                         'images': hotel['hotel']['images'] if hotel['hotel']['images'] else [],
                         'country': flight['country'],
-                        'hotel_object': hotel['hotel_object']
+                        'hotel_object': hotel['hotel_object'],
+                        'cheapest': False,  # add a 'cheapest' attribute
+                        'bestDeal': False  # Add a 'bestDeal' attribute
                     })
-            # break
-        print("Below is bestPackages list length")
-        print(len(bestPackagesList))
         cheapest_prices = self.findCheapestPackages(bestPackagesList)
-        print("below is cheapest prices")
-        print(cheapest_prices)
+
+        # Find the package with the lowest 'deal_price' and mark it as 'cheapest'
+        if bestPackagesList:
+            cheapest_package = min(bestPackagesList, key=lambda x: x['deal_price'])
+            cheapest_package['cheapest'] = True
+
         bestPackagesList.append({'calendar': cheapest_prices})
 
+        bestPackagesList = self.findBestDealPackage(bestPackagesList)
+
         return bestPackagesList
+
 
     def post(self, request, *args, **kwargs):
         user_id = request.data['user_id']
