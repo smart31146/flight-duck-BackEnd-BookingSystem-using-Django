@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 import environ
 import os
 from pathlib import Path
-from decouple import config
+# from decouple import config
 # import dj_database_url
 # import django_heroku
 
@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'users',
     'flights',
     'hotels',
+    'booking',
     # rest framework and cors
     'corsheaders',
     'rest_framework',
@@ -72,7 +73,7 @@ INSTALLED_APPS = [
     'social_django',
     'drf_social_oauth2',
     # import export user data
-    'import_export'
+    'import_export',
 ]
 
 MIDDLEWARE = [
@@ -85,7 +86,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware'
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'

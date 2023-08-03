@@ -31,6 +31,8 @@ urlpatterns = [
     path('send-booking-confirmation/', SendBookingConfirmation.as_view(), name='send-booking-confirmation'),
 
     path('travel/', include('travel.urls')),
+    path('booking/', include('booking.urls')),
+
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -8,7 +8,7 @@ A Django server providing the Flight & Hotel pricing and to perform booking oper
 
 1. Install [Python](https://www.python.org/downloads/)
     * For Mac/Linux systems, install `python-dev` tools. [Source](https://stackoverflow.com/a/21530768)
-2. Install [Pip](https://pip.pypa.io/en/stable/installation/) for your system
+2. Install [py](https://pip.pypa.io/en/stable/installation/) for your system
 3. Install [Postgres](https://www.postgresql.org/download/) and [pg_group](https://stackoverflow.com/a/12037133) for your system
 4. Install `pip` packages from `requirements.txt` file
 ```shell
@@ -16,7 +16,7 @@ python -m pip install -r requirements.txt
 ```
 5. Get the `.env` from a developer and place in root directory of repo
 6. Start server with: `python manage.py runserver`
-7. Profit!
+7. Profit! 
 
 ### Run both Front-End with Back-End
 
@@ -48,7 +48,6 @@ This executable is found in the `libpq-dev` package (PostgreSQL development tool
 2. Also make sure that the relevant path is exported in your `PATH` environment variable (`export PATH=$PATH:/usr/pgsql-10/bin`)
 
 If you edit your `PATH`, open a new terminal session for it to take effect.
-
 
 
 <!-- Flight duck project

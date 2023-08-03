@@ -1387,27 +1387,55 @@ class GetCountries(APIView):
     #     # return Response({'message': 'Success'}, status=status.HTTP_200_OK)
 
 
+# class GetAirportCode(APIView):
+#     permission_classes = [AllowAny]
+
+#     def get(self, request, *args, **kwargs):
+#         query = request.query_params.get('query')
+#         print("query=========", query)
+#         if query is not None:
+#             airports = list(models.AirportModel.objects.filter(
+#                 airport_name__icontains=query
+#             ).values(
+#                 'airport_name', 'airport_code',
+#                 'city__city_name', 'city__city_code')[:6])
+#         else:
+#             country = request.query_params.get('country')
+#             airports = list(models.AirportModel.objects.filter(
+#                 country__country_code__icontains=country
+#             ).values('airport_name', 'airport_code',
+#                      'city__city_name', 'city__city_code')[:6])
+#         if (len(airports) > 0):
+#             return Response({
+#                 'list': airports
+#             }, status=status.HTTP_200_OK)
+#         else:
+#             return Response({'list': []}, status=status.HTTP_406_NOT_ACCEPTABLE)
+
 class GetAirportCode(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, *args, **kwargs):
-        query = request.query_params.get('query')
-        print("query=========", query)
-        if query is not None:
-            airports = list(models.AirportModel.objects.filter(
-                airport_name__icontains=query
-            ).values(
-                'airport_name', 'airport_code',
-                'city__city_name', 'city__city_code')[:6])
+def post(self, request, format='json'):
+    # TODO change this endpoint for local based on country
+    print("in autosuiggest")
+    flights_destination_auto_suggestion = '{0}autosuggest/v3/geo/hierarchy/flights/en-AU'.format(FLIGHTS_API_URL)
+
+    serializer = serializers.AutoSuggestModelFormSerializer(data=request.data)
+    if serializer.is_valid():
+        query = serializer.data['query']
+        headers = {'apiKey': FLIGHTS_API_KEY}
+        result = requests.get(flights_destination_auto_suggestion, params={'query': query}, headers=headers)
+
+        if result.status_code == 200:
+            response_data = json.loads(result.text)
+            places_map = response_data['placesMap']
+            # Filter out airports that do not serve commercial flights
+            filtered_places = {k: v for k, v in places_map.items() if not (v['type'] == 'airport' and v['commercial'] == False)}
+            # Flatten the response data
+            flat_response = []
+            for _, place in filtered_places.items():
+                flat_response.append(place)
+            return Response(flat_response, status=status.HTTP_200_OK)
         else:
-            country = request.query_params.get('country')
-            airports = list(models.AirportModel.objects.filter(
-                country__country_code__icontains=country
-            ).values('airport_name', 'airport_code',
-                     'city__city_name', 'city__city_code')[:6])
-        if (len(airports) > 0):
-            return Response({
-                'list': airports
-            }, status=status.HTTP_200_OK)
-        else:
-            return Response({'list': []}, status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response({'message': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
