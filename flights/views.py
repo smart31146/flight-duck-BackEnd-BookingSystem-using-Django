@@ -732,8 +732,8 @@ class CacheFlightHotelsPackage(APIView):
 
         except requests.exceptions.HTTPError as e:
             finalFlightsList.append({
-                'outbounddate': '01/08/2022 ERROR',
-                'inbounddate': '04/08/2022 ERROR',
+                # 'outbounddate': '01/08/2022 ERROR',
+                # 'inbounddate': '04/08/2022 ERROR',
                 'carrier_name': '',
                 'price': 0
             })
