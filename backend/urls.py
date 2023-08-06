@@ -19,6 +19,7 @@ from django.conf.urls.static import static
 from django.conf import settings
 
 from flights.views import SendBookingConfirmation
+from flights.views import AutoSuggest
 
 
 
@@ -29,6 +30,7 @@ urlpatterns = [
     path('hotels/', include('hotels.urls')),
     path('auth/', include('drf_social_oauth2.urls', namespace='drf')),
     path('send-booking-confirmation/', SendBookingConfirmation.as_view(), name='send-booking-confirmation'),
+    path('autosuggest/', AutoSuggest.as_view(), name='auto-suggest'),
 
     path('travel/', include('travel.urls')),
     path('booking/', include('booking.urls')),

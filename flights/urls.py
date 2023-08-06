@@ -2,7 +2,6 @@ from django.urls import path, include
 from . import views
 
 urlpatterns = [
-    path('autosuggest/', views.AutoSuggest.as_view(), name="autosuggest"),
     path('browse-routes/', views.BrowseRoutes.as_view(), name="browse-routes"),
     path('live-flight-prices/', views.FlightLivePrices().as_view(), name="live-flight-prices"),
     path('store-locale/', views.storeLocaleInformation, name="store-locale"),

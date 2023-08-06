@@ -3,7 +3,7 @@ from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 
 class AutoSuggestModel(models.Model):
-    query = models.CharField(max_length=100)
+    query = models.JSONField()
 
 class BrowseRouteModel(models.Model):
     origin = models.CharField(max_length=10)

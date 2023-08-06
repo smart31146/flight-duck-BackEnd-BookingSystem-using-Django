@@ -61,30 +61,29 @@ def createXSignature():
 class AutoSuggest(APIView):
     permission_classes = [AllowAny]
 
-def post(self, request, format='json'):
-    # TODO change this endpoint for local based on country
-    print("in autosuiggest")
-    flights_destination_auto_suggestion = '{0}autosuggest/v3/geo/hierarchy/flights/en-AU'.format(FLIGHTS_API_URL)
+    def post(self, request, format='json'):
+        # TODO change this endpoint for local based on country
+        print("in autosuiggest")
+        flights_destination_auto_suggestion = 'https://partners.api.skyscanner.net/apiservices/v3/autosuggest/flights'
 
-    serializer = serializers.AutoSuggestModelFormSerializer(data=request.data)
-    if serializer.is_valid():
-        query = serializer.data['query']
-        headers = {'apiKey': FLIGHTS_API_KEY}
-        result = requests.get(flights_destination_auto_suggestion, params={'query': query}, headers=headers)
+        serializer = serializers.AutoSuggestModelFormSerializer(data=request.data)
+        if serializer.is_valid():
+            query = serializer.data['query']
+            headers = {
+                'x-api-key': FLIGHTS_API_KEY,
+                'Content-Type': 'application/json'
+            }
+            result = requests.post(flights_destination_auto_suggestion, json={'query': query}, headers=headers)
 
         if result.status_code == 200:
             response_data = json.loads(result.text)
-            places_map = response_data['placesMap']
-            # Filter out airports that do not serve commercial flights
-            filtered_places = {k: v for k, v in places_map.items() if not (v['type'] == 'airport' and v['commercial'] == False)}
-            # Flatten the response data
-            flat_response = []
-            for _, place in filtered_places.items():
-                flat_response.append(place)
-            return Response(flat_response, status=status.HTTP_200_OK)
+            places = response_data['places']
+            # Filter out objects that don't contain an iataCode property
+            filtered_places = [place for place in places if 'iataCode' in place]
+            return Response(filtered_places, status=status.HTTP_200_OK)
         else:
-            return Response({'message': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': json.loads(result.text)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
@@ -501,10 +500,10 @@ class FlightLivePrices(APIView):
                 query_legs = [
                     {
                         "originPlaceId": {
-                            "iata": request.data['originplace'].removesuffix('-sky')
+                            "iata": request.data['originplace']
                         },
                         "destinationPlaceId": {
-                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                            "iata": request.data['destinationplace']
                         },
                         "date": {
                             "year": date_obj_outbounddate.year,
@@ -517,10 +516,10 @@ class FlightLivePrices(APIView):
                 if date_obj_inbounddate is not None:
                     query_legs.append({
                         "originPlaceId": {
-                            "iata": request.data['destinationplace'].removesuffix('-sky')
+                            "iata": request.data['destinationplace']
                         },
                         "destinationPlaceId": {
-                            "iata": request.data['originplace'].removesuffix('-sky')
+                            "iata": request.data['originplace']
                         },
                         "date": {
                             "year": date_obj_inbounddate.year,
@@ -629,12 +628,12 @@ class CacheFlightHotelsPackage(APIView):
             {
                 "originPlace": {
                     "queryPlace": {
-                        "iata": data['originplace'].removesuffix('-sky')
+                        "iata": data['originplace']
                     }
                 },
                 "destinationPlace": {
                     "queryPlace": {
-                        "iata": data['destinationplace'].removesuffix('-sky')
+                        "iata": data['destinationplace']
                     }
                 },
                 "date_range": {
@@ -654,12 +653,12 @@ class CacheFlightHotelsPackage(APIView):
             legs.append({
                 "originPlace": {
                     "queryPlace": {
-                        "iata": data['destinationplace'].removesuffix('-sky')
+                        "iata": data['destinationplace']
                     }
                 },
                 "destinationPlace": {
                     "queryPlace": {
-                        "iata": data['originplace'].removesuffix('-sky')
+                        "iata": data['originplace']
                     }
                 },
                 "date_range": {
@@ -733,8 +732,8 @@ class CacheFlightHotelsPackage(APIView):
 
         except requests.exceptions.HTTPError as e:
             finalFlightsList.append({
-                'outbounddate': '01/08/2022',
-                'inbounddate': '04/08/2022',
+                'outbounddate': '01/08/2022 ERROR',
+                'inbounddate': '04/08/2022 ERROR',
                 'carrier_name': '',
                 'price': 0
             })
@@ -772,10 +771,10 @@ class CacheFlightHotelsPackage(APIView):
             query_legs = [
                 {
                     "originPlaceId": {
-                        "iata": request_data['originplace'].removesuffix('-sky')
+                        "iata": request_data['originplace']
                     },
                     "destinationPlaceId": {
-                        "iata": request_data['destinationplace'].removesuffix('-sky')
+                        "iata": request_data['destinationplace']
                     },
                     "date": {
                         "year": selected_year,
@@ -788,10 +787,10 @@ class CacheFlightHotelsPackage(APIView):
             if inbound_date_obj is not None:
                 query_legs.append({
                     "originPlaceId": {
-                        "iata": request_data['originplace'].removesuffix('-sky')
+                        "iata": request_data['originplace']
                     },
                     "destinationPlaceId": {
-                        "iata": request_data['destinationplace'].removesuffix('-sky')
+                        "iata": request_data['destinationplace']
                     },
                     "date": {
                         "year": selected_year,
